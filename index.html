@@ -34,10 +34,10 @@
     o = l.createElement("script"); o.id = p; o.async = 1; o.src = a;
     o.onerror = function(){ log("Error cargando el script del widget"); };
     r.appendChild(o);
-  })(window, document, "https://widget.llamadapro.app/widgetsdk.umd.js", "llapro-id");
+  })(window, document, "https://widget.llamadapro.app/widgetsdk.umd.js", "pdv-unlock");
 
-  window.LlaProSdk("initPhoneWidgetSdk", "llapro-widget-id");
-  window.LlaProSdk("createWidget");
+  window.LlaProSdk("initPhoneWidgetSdk", "pdv-unlock");
+  window.LlaProSdk("createWidget", { widgetId: "pdv-phone-widget" });
 
   window.addEventListener("llapro_phonewidget_on_ready", function(){
     document.getElementById('estado').textContent = "widget listo"; log("on_ready");
