@@ -121,7 +121,7 @@
     $('prog').textContent = "Seller " + (pos + 1) + " de " + COLA.length + (s.filtro ? " · " + s.filtro : "");
     var neg = (s.negocio || "").trim();
     $('negocio').textContent = neg;
-    $('negocioRow').style.display = (neg && neg !== (s.nombre || "").trim()) ? 'block' : 'none';
+    $('negocioRow').style.display = neg ? 'block' : 'none';
     $('bCopNeg').textContent = 'Copiar';
     $('nombre').textContent = s.nombre || "(sin nombre)";
     $('sid').textContent = "ID " + s.id;
