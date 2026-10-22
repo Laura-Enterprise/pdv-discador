@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discador PDV - Unlock</title>
+<style>
+  body { margin:0; font-family: Montserrat, Arial, sans-serif; color:#333; background:#fff; }
+  header { background:#0177FF; color:#fff; padding:14px 24px; font-weight:700; font-size:18px; }
+  main { padding:24px; max-width:760px; }
+  button { background:#0177FF; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:14px; cursor:pointer; margin-right:8px; }
+  button.sec { background:#EBEAEA; color:#333; }
+  #estado { font-weight:700; }
+  pre { background:#EBEAEA; padding:12px; border-radius:8px; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<header>Discador PDV · Unlock</header>
+<main>
+  <p>Prueba del Phone Widget de comOS. Estado: <span id="estado">cargando…</span></p>
+  <button onclick="abrir()">Abrir widget</button>
+  <button class="sec" onclick="preparar()">Preparar llamada de prueba (no llama)</button>
+  <h4>Registro</h4>
+  <pre id="log"></pre>
+</main>
+
+<script>
+  function log(m){ document.getElementById('log').textContent += m + "\n"; }
+
+  (function (L, l, a, p, r, o) {
+    L.LlaProSdk = L.LlaProSdk || function () { (L.LlaProSdk.q = L.LlaProSdk.q || []).push(arguments); };
+    L._LlaProSettings = { integrationId: p };
+    r = l.getElementsByTagName("head")[0];
+    o = l.createElement("script"); o.id = p; o.async = 1; o.src = a;
+    o.onerror = function(){ log("Error cargando el script del widget"); };
+    r.appendChild(o);
+  })(window, document, "https://widget.llamadapro.app/widgetsdk.umd.js", "llapro-id");
+
+  window.LlaProSdk("initPhoneWidgetSdk", "llapro-widget-id");
+  window.LlaProSdk("createWidget");
+
+  window.addEventListener("llapro_phonewidget_on_ready", function(){
+    document.getElementById('estado').textContent = "widget listo"; log("on_ready");
+  });
+  window.addEventListener("llapro_phonewidget_on_call_start", function(e){ log("call_start " + JSON.stringify(e.detail)); });
+  window.addEventListener("llapro_phonewidget_on_call_end", function(e){ log("call_end " + JSON.stringify(e.detail)); });
+
+  function abrir(){ try { window.LlaProSdk("getWidget").maximize(); log("widget abierto"); } catch(e){ log("error al abrir: " + e); } }
+  function preparar(){
+    try {
+      window.LlaProSdk("getWidget").prepareCall({ callTo: "+525500000000", optionalData: { contactExternalId: "prueba" } });
+      log("número de prueba preparado (no se llama)");
+    } catch(e){ log("error al preparar: " + e); }
+  }
+</script>
+</body>
+</html>
