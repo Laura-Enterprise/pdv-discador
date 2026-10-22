@@ -20,6 +20,10 @@
   <p>Prueba del Phone Widget de comOS. Estado: <span id="estado">cargando…</span></p>
   <button onclick="abrir()">Abrir widget</button>
   <button class="sec" onclick="preparar()">Preparar llamada de prueba (no llama)</button>
+  <h4>Llamada real de prueba</h4>
+  <p style="margin:0 0 8px">Escribe un número tuyo con código de país (por ejemplo +57…) y pulsa Llamar.</p>
+  <input id="numero" type="tel" placeholder="+57…" style="padding:10px;border:1px solid #C9C9C9;border-radius:8px;font-size:14px;width:220px">
+  <button onclick="llamar()">Llamar a este número</button>
   <h4>Registro</h4>
   <pre id="log"></pre>
 </main>
@@ -44,6 +48,17 @@
   });
   window.addEventListener("llapro_phonewidget_on_call_start", function(e){ log("call_start " + JSON.stringify(e.detail)); });
   window.addEventListener("llapro_phonewidget_on_call_end", function(e){ log("call_end " + JSON.stringify(e.detail)); });
+
+  function llamar(){
+    var n = (document.getElementById('numero').value || "").replace(/[\s\-()]/g, "");
+    if (!/^\+\d{8,15}$/.test(n)) { log("Número no válido. Usa el formato +57XXXXXXXXXX"); return; }
+    if (!confirm("¿Llamar ahora a " + n + "?")) { log("Llamada cancelada"); return; }
+    try {
+      window.LlaProSdk("getWidget").maximize();
+      window.LlaProSdk("getWidget").startCall({ callTo: n, optionalData: { contactExternalId: "prueba-pdv-discador" } });
+      log("startCall enviado a " + n);
+    } catch(e){ log("error al llamar: " + e); }
+  }
 
   function abrir(){ try { window.LlaProSdk("getWidget").maximize(); log("widget abierto"); } catch(e){ log("error al abrir: " + e); } }
   function preparar(){
