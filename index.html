@@ -7,29 +7,209 @@
 <style>
   body { margin:0; font-family: Montserrat, Arial, sans-serif; color:#333; background:#fff; }
   header { background:#0177FF; color:#fff; padding:14px 24px; font-weight:700; font-size:18px; }
-  main { padding:24px; max-width:760px; }
-  button { background:#0177FF; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:14px; cursor:pointer; margin-right:8px; }
+  main { padding:20px 24px; max-width:620px; }
+  button { background:#0177FF; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:14px; cursor:pointer; margin:0 8px 6px 0; }
   button.sec { background:#EBEAEA; color:#333; }
+  button.on { background:#9166FA; color:#fff; }
+  button:disabled { opacity:.45; cursor:default; }
+  select { padding:6px; border:1px solid #C9C9C9; border-radius:6px; }
   #estado { font-weight:700; }
-  pre { background:#EBEAEA; padding:12px; border-radius:8px; white-space:pre-wrap; }
+  pre { background:#EBEAEA; padding:12px; border-radius:8px; white-space:pre-wrap; max-height:160px; overflow:auto; font-size:12px; }
+  #cola { display:none; background:#EBEAEA; border-left:6px solid #0177FF; border-radius:8px; padding:14px 16px; margin-bottom:16px; }
+  .prog { font-size:12px; color:#959595; margin-bottom:6px; }
+  .nombre { font-size:18px; font-weight:700; }
+  .tel { margin:6px 0; font-size:15px; }
+  .int { display:inline-block; background:#fff; border-radius:12px; padding:2px 10px; font-size:12px; margin-left:8px; }
+  #msg { margin:10px 0 0; font-weight:700; min-height:20px; color:#0177FF; }
+  .cfg { font-size:13px; margin:8px 0; }
+  details { margin-top:14px; }
 </style>
 </head>
 <body>
 <header>Discador PDV · Unlock</header>
 <main>
-  <p>Prueba del Phone Widget de comOS. Estado: <span id="estado">cargando…</span></p>
-  <button onclick="abrir()">Abrir widget</button>
-  <button class="sec" onclick="preparar()">Preparar llamada de prueba (no llama)</button>
-  <h4>Llamada real de prueba</h4>
-  <p style="margin:0 0 8px">Escribe un número tuyo con código de país (por ejemplo +57…) y pulsa Llamar.</p>
-  <input id="numero" type="tel" placeholder="+57…" style="padding:10px;border:1px solid #C9C9C9;border-radius:8px;font-size:14px;width:220px">
-  <button onclick="llamar()">Llamar a este número</button>
-  <h4>Registro</h4>
-  <pre id="log"></pre>
+  <p>Phone Widget de comOS. Estado: <span id="estado">cargando…</span></p>
+
+  <div id="vacio">Abre este discador desde el tablero: filtra tus sellers y pulsa el botón para llamar la lista.</div>
+
+  <div id="cola">
+    <div style="margin-bottom:10px">
+      <button id="mManual" onclick="setModo('manual')">Manual</button>
+      <button id="mAuto" class="sec" onclick="setModo('auto')">Automático</button>
+    </div>
+    <div class="prog" id="prog"></div>
+    <div class="nombre" id="nombre"></div>
+    <div class="prog" id="sid"></div>
+    <div id="tels"></div>
+
+    <div id="ctlManual">
+      <button onclick="ant()" class="sec" id="bAnt">← Anterior</button>
+      <button onclick="llamarActual(false)" id="bLlamar">Llamar</button>
+      <button onclick="sig()" class="sec" id="bSig">Siguiente →</button>
+    </div>
+
+    <div id="ctlAuto" style="display:none">
+      <div class="cfg">
+        Máx. intentos por seller:
+        <select id="maxi"><option>1</option><option selected>2</option><option>3</option></select>
+        &nbsp; Pausa entre llamadas:
+        <select id="pausa"><option value="3">3 s</option><option value="5" selected>5 s</option><option value="10">10 s</option></select>
+      </div>
+      <button id="bIni" onclick="iniciarAuto()">▶ Iniciar</button>
+      <button id="bPau" class="sec" onclick="pausar('Pausado')">⏸ Pausar</button>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <details>
+    <summary>Pruebas</summary>
+    <p style="margin:8px 0">Escribe un número tuyo con código de país y pulsa Llamar.</p>
+    <input id="numero" type="tel" placeholder="+57…" style="padding:10px;border:1px solid #C9C9C9;border-radius:8px;font-size:14px;width:200px">
+    <button onclick="llamarPrueba()">Llamar a este número</button>
+    <h4>Registro</h4>
+    <pre id="log"></pre>
+  </details>
 </main>
 
 <script>
-  function log(m){ document.getElementById('log').textContent += m + "\n"; }
+  var COLA = [], pos = 0, ACTUAL = null;
+  var MODO = "manual", RUN = false, EN_LLAMADA = false, WD = null, CD = null;
+  var INT = {};
+  try { INT = JSON.parse(localStorage.getItem('pdv_intentos') || '{}'); } catch(e){ INT = {}; }
+
+  function $(id){ return document.getElementById(id); }
+  function log(m){ var p = $('log'); p.textContent += m + "\n"; p.scrollTop = p.scrollHeight; }
+  function msg(m){ $('msg').textContent = m || ""; }
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function MAXI(){ return parseInt($('maxi').value, 10) || 2; }
+  function PAUSA(){ return parseInt($('pausa').value, 10) || 5; }
+
+  function normTel(t){
+    var d = String(t).replace(/\D/g, "");
+    if (/^(044|045|521|52|44|45)?\d{10}$/.test(d)) return "+52" + d.slice(-10);
+    return null;
+  }
+  function primerTel(s){
+    var num = null;
+    (s.tels || []).some(function(t){ num = normTel(t); return !!num; });
+    return num;
+  }
+  function elegible(s){ return !!primerTel(s) && (INT[s.id] || 0) < MAXI(); }
+  function buscarSig(desde){
+    for (var k = desde; k < COLA.length; k++) { if (elegible(COLA[k])) return k; }
+    return -1;
+  }
+
+  function render(){
+    var hay = COLA.length > 0;
+    $('vacio').style.display = hay ? 'none' : 'block';
+    $('cola').style.display = hay ? 'block' : 'none';
+    $('mManual').className = MODO === "manual" ? "" : "sec";
+    $('mAuto').className = MODO === "auto" ? "on" : "sec";
+    $('ctlManual').style.display = MODO === "manual" ? "block" : "none";
+    $('ctlAuto').style.display = MODO === "auto" ? "block" : "none";
+    $('bIni').disabled = RUN;
+    $('bPau').disabled = !RUN;
+    if (!hay) return;
+    var s = COLA[pos];
+    $('prog').textContent = "Seller " + (pos + 1) + " de " + COLA.length + (s.filtro ? " · " + s.filtro : "");
+    $('nombre').textContent = s.nombre || "(sin nombre)";
+    $('sid').textContent = "ID " + s.id;
+    var n = INT[s.id] || 0;
+    var html = "";
+    (s.tels || []).forEach(function(t){
+      var nt = normTel(t);
+      html += '<div class="tel">📞 ' + esc(nt || t) + (nt ? "" : " (no válido)") + "</div>";
+    });
+    html += '<div class="tel">Intentos: <span class="int">' + n + "</span>" + (n >= MAXI() ? " (llegó al máximo)" : "") + "</div>";
+    $('tels').innerHTML = html;
+    $('bAnt').disabled = pos === 0;
+    $('bSig').disabled = pos >= COLA.length - 1;
+  }
+
+  function setModo(m){
+    if (m === MODO) return;
+    if (RUN) pausar("Pausado");
+    MODO = m; msg(""); render();
+  }
+  function sig(){ if (pos < COLA.length - 1) { pos++; render(); } }
+  function ant(){ if (pos > 0) { pos--; render(); } }
+
+  function limpiarTemporizadores(){
+    if (CD) { clearInterval(CD); CD = null; }
+    if (WD) { clearTimeout(WD); WD = null; }
+  }
+  function pausar(motivo){
+    RUN = false; limpiarTemporizadores();
+    msg(motivo || "Pausado"); render();
+  }
+
+  function llamarActual(auto){
+    var s = COLA[pos]; if (!s) return;
+    var num = primerTel(s);
+    if (!num) { log("Este seller no tiene un teléfono válido"); if (auto) avanzar(); return; }
+    try {
+      ACTUAL = s.id; EN_LLAMADA = false;
+      var w = window.LlaProSdk("getWidget");
+      w.maximize();
+      w.startCall({ callTo: num, optionalData: { contactExternalId: String(s.id) } });
+      log("startCall a " + num + " (seller " + s.id + ")");
+      msg(auto ? "Llamando a " + (s.nombre || s.id) + "…" : "");
+      if (WD) clearTimeout(WD);
+      WD = setTimeout(function(){
+        if (!EN_LLAMADA) {
+          log("La llamada no inició en 20 s");
+          if (RUN) pausar("Pausado: la llamada no inició. Revisa el micrófono y vuelve a iniciar.");
+        }
+      }, 20000);
+    } catch(e){
+      log("error al llamar: " + e);
+      if (RUN) pausar("Pausado: error al llamar");
+    }
+  }
+
+  function iniciarAuto(){
+    var k = buscarSig(pos);
+    if (k < 0) { msg("No quedan sellers por llamar (todos llegaron al máximo o no tienen teléfono válido)."); return; }
+    RUN = true; pos = k; render(); llamarActual(true);
+  }
+
+  function avanzar(){
+    var k = buscarSig(pos + 1);
+    if (k < 0) { RUN = false; limpiarTemporizadores(); msg("Lista terminada ✔"); render(); return; }
+    var seg = PAUSA();
+    msg("Siguiente llamada en " + seg + " s…");
+    CD = setInterval(function(){
+      if (!RUN) { limpiarTemporizadores(); return; }
+      seg--;
+      if (seg > 0) { msg("Siguiente llamada en " + seg + " s…"); return; }
+      limpiarTemporizadores();
+      pos = k; render(); llamarActual(true);
+    }, 1000);
+  }
+
+  function llamarPrueba(){
+    var n = ($('numero').value || "").replace(/[\s\-()]/g, "");
+    if (!/^\+\d{8,15}$/.test(n)) { log("Número no válido. Usa el formato +57XXXXXXXXXX"); return; }
+    if (!confirm("¿Llamar ahora a " + n + "?")) { log("Llamada cancelada"); return; }
+    try {
+      window.LlaProSdk("getWidget").maximize();
+      window.LlaProSdk("getWidget").startCall({ callTo: n, optionalData: { contactExternalId: "prueba-pdv-discador" } });
+      log("startCall enviado a " + n);
+    } catch(e){ log("error al llamar: " + e); }
+  }
+
+  // El tablero (Apps Script) manda la lista filtrada
+  window.addEventListener("message", function(e){
+    if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin)) return;
+    var d = e.data;
+    if (d && d.type === "cola" && Array.isArray(d.items)) {
+      pausar(""); COLA = d.items.slice(0, 500); pos = 0;
+      log("Lista recibida: " + COLA.length + " sellers");
+      render();
+    }
+  });
+  if (window.opener) { try { window.opener.postMessage({ type: "listo" }, "*"); } catch(e){} }
 
   (function (L, l, a, p, r, o) {
     L.LlaProSdk = L.LlaProSdk || function () { (L.LlaProSdk.q = L.LlaProSdk.q || []).push(arguments); };
@@ -44,29 +224,25 @@
   window.LlaProSdk("createWidget", { widgetId: "pdv-phone-widget" });
 
   window.addEventListener("llapro_phonewidget_on_ready", function(){
-    document.getElementById('estado').textContent = "widget listo"; log("on_ready");
+    $('estado').textContent = "widget listo"; log("on_ready");
   });
-  window.addEventListener("llapro_phonewidget_on_call_start", function(e){ log("call_start " + JSON.stringify(e.detail)); });
-  window.addEventListener("llapro_phonewidget_on_call_end", function(e){ log("call_end " + JSON.stringify(e.detail)); });
+  window.addEventListener("llapro_phonewidget_on_call_start", function(e){
+    EN_LLAMADA = true; if (WD) { clearTimeout(WD); WD = null; }
+    log("call_start " + JSON.stringify(e.detail));
+  });
+  window.addEventListener("llapro_phonewidget_on_call_end", function(e){
+    log("call_end " + JSON.stringify(e.detail));
+    EN_LLAMADA = false;
+    var id = (e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL;
+    if (id && id !== "prueba-pdv-discador") {
+      INT[id] = (INT[id] || 0) + 1;
+      try { localStorage.setItem('pdv_intentos', JSON.stringify(INT)); } catch(err){}
+      render();
+      if (RUN) avanzar();
+    }
+  });
 
-  function llamar(){
-    var n = (document.getElementById('numero').value || "").replace(/[\s\-()]/g, "");
-    if (!/^\+\d{8,15}$/.test(n)) { log("Número no válido. Usa el formato +57XXXXXXXXXX"); return; }
-    if (!confirm("¿Llamar ahora a " + n + "?")) { log("Llamada cancelada"); return; }
-    try {
-      window.LlaProSdk("getWidget").maximize();
-      window.LlaProSdk("getWidget").startCall({ callTo: n, optionalData: { contactExternalId: "prueba-pdv-discador" } });
-      log("startCall enviado a " + n);
-    } catch(e){ log("error al llamar: " + e); }
-  }
-
-  function abrir(){ try { window.LlaProSdk("getWidget").maximize(); log("widget abierto"); } catch(e){ log("error al abrir: " + e); } }
-  function preparar(){
-    try {
-      window.LlaProSdk("getWidget").prepareCall({ callTo: "+525500000000", optionalData: { contactExternalId: "prueba" } });
-      log("número de prueba preparado (no se llama)");
-    } catch(e){ log("error al preparar: " + e); }
-  }
+  render();
 </script>
 </body>
 </html>
