@@ -63,9 +63,10 @@
 
   <details>
     <summary>Pruebas</summary>
-    <p style="margin:8px 0">Escribe un número tuyo con código de país y pulsa Llamar.</p>
-    <input id="numero" type="tel" placeholder="+57…" style="padding:10px;border:1px solid #C9C9C9;border-radius:8px;font-size:14px;width:200px">
+    <p style="margin:8px 0">Escribe un número tuyo con código de país y pulsa Llamar. Para probar el modo Automático, escribe varios separados por coma y pulsa «Probar en automático».</p>
+    <input id="numero" type="tel" placeholder="+57…" style="padding:10px;border:1px solid #C9C9C9;border-radius:8px;font-size:14px;width:340px">
     <button onclick="llamarPrueba()">Llamar a este número</button>
+    <button onclick="colaPrueba()">Probar en automático</button>
     <h4>Registro</h4>
     <pre id="log"></pre>
   </details>
@@ -91,6 +92,7 @@
     return null;
   }
   function primerTel(s){
+    if (s.prueba) return s.tels[0];
     var num = null;
     (s.tels || []).some(function(t){ num = normTel(t); return !!num; });
     return num;
@@ -119,7 +121,7 @@
     var n = INT[s.id] || 0;
     var html = "";
     (s.tels || []).forEach(function(t){
-      var nt = normTel(t);
+      var nt = s.prueba ? t : normTel(t);
       html += '<div class="tel">📞 ' + esc(nt || t) + (nt ? "" : " (no válido)") + "</div>";
     });
     html += '<div class="tel">Intentos: <span class="int">' + n + "</span>" + (n >= MAXI() ? " (llegó al máximo)" : "") + "</div>";
@@ -188,6 +190,20 @@
       limpiarTemporizadores();
       pos = k; render(); llamarActual(true);
     }, 1000);
+  }
+
+  // Cola de prueba: números escritos a mano (no quedan guardados en el código)
+  function colaPrueba(){
+    var nums = ($('numero').value || "").split(/[,;\n]/).map(function(x){ return x.replace(/[\s\-()]/g, ""); }).filter(Boolean);
+    if (!nums.length) { log("Escribe al menos un número"); return; }
+    var malos = nums.filter(function(n){ return !/^\+\d{8,15}$/.test(n); });
+    if (malos.length) { log("Número no válido (usa +código de país y número): " + malos.join(", ")); return; }
+    pausar("");
+    COLA = nums.map(function(n, i){ return { id: "prueba-" + (i + 1), nombre: "Prueba " + (i + 1), tels: [n], filtro: "Lista de prueba", prueba: true }; });
+    COLA.forEach(function(s){ delete INT[s.id]; });
+    pos = 0; MODO = "auto"; msg("");
+    log("Cola de prueba: " + COLA.length + " números. Pulsa Iniciar.");
+    render();
   }
 
   function llamarPrueba(){
