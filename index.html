@@ -7,7 +7,7 @@
 <style>
   body { margin:0; font-family: Montserrat, Arial, sans-serif; color:#333; background:#fff; }
   header { background:#0177FF; color:#fff; padding:14px 24px; font-weight:700; font-size:18px; }
-  main { padding:20px 24px; max-width:620px; }
+  main { padding:20px 24px; max-width:440px; }
   button { background:#0177FF; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:14px; cursor:pointer; margin:0 8px 6px 0; }
   button.sec { background:#EBEAEA; color:#333; }
   button.on { background:#9166FA; color:#fff; }
@@ -78,6 +78,7 @@
   try { INT = JSON.parse(localStorage.getItem('pdv_intentos') || '{}'); } catch(e){ INT = {}; }
 
   function $(id){ return document.getElementById(id); }
+  function uso(evento, detalle){ if (window.opener) { try { window.opener.postMessage({ type: "uso", evento: evento, detalle: detalle || "" }, "*"); } catch(e){} } }
   function log(m){ var p = $('log'); p.textContent += m + "\n"; p.scrollTop = p.scrollHeight; }
   function msg(m){ $('msg').textContent = m || ""; }
   function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
@@ -140,8 +141,9 @@
     if (WD) { clearTimeout(WD); WD = null; }
   }
   function pausar(motivo){
+    if (RUN) uso("discador_pausa", motivo || "");
     RUN = false; limpiarTemporizadores();
-    msg(motivo || "Pausado"); render();
+    msg(motivo === "" ? "" : (motivo || "Pausado")); render();
   }
 
   function llamarActual(auto){
@@ -171,7 +173,7 @@
   function iniciarAuto(){
     var k = buscarSig(pos);
     if (k < 0) { msg("No quedan sellers por llamar (todos llegaron al máximo o no tienen teléfono válido)."); return; }
-    RUN = true; pos = k; render(); llamarActual(true);
+    RUN = true; uso("discador_auto_iniciar", "desde=" + (pos + 1)); pos = k; render(); llamarActual(true);
   }
 
   function avanzar(){
@@ -205,7 +207,7 @@
     var d = e.data;
     if (d && d.type === "cola" && Array.isArray(d.items)) {
       pausar(""); COLA = d.items.slice(0, 500); pos = 0;
-      log("Lista recibida: " + COLA.length + " sellers");
+      log("Lista recibida: " + COLA.length + " sellers"); uso("discador_lista", "sellers=" + COLA.length);
       render();
     }
   });
@@ -229,10 +231,12 @@
   window.addEventListener("llapro_phonewidget_on_call_start", function(e){
     EN_LLAMADA = true; if (WD) { clearTimeout(WD); WD = null; }
     log("call_start " + JSON.stringify(e.detail));
+    uso("llamada_inicio", "seller=" + ((e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL) + " modo=" + MODO);
   });
   window.addEventListener("llapro_phonewidget_on_call_end", function(e){
     log("call_end " + JSON.stringify(e.detail));
     EN_LLAMADA = false;
+    uso("llamada_fin", "seller=" + ((e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL) + " modo=" + MODO);
     var id = (e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL;
     if (id && id !== "prueba-pdv-discador") {
       INT[id] = (INT[id] || 0) + 1;
