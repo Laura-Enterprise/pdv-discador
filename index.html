@@ -79,7 +79,7 @@
 </main>
 
 <script>
-  var COLA = [], pos = 0, ACTUAL = null, ACTUAL_TEL = null, RONDA = 1;
+  var COLA = [], pos = 0, ACTUAL = null, ACTUAL_TEL = null, RONDA = 1, FALLOS_SEGUIDOS = 0, FALLOS_RECIENTES = [];
   var MODO = "manual", RUN = false, EN_LLAMADA = false, WD = null, CD = null;
 
   // Intentos por NÚMERO y sellers contactados. Se reinician cada día.
@@ -87,7 +87,8 @@
   function cargarEstado(){
     var e = null;
     try { e = JSON.parse(localStorage.getItem('pdv_estado_v2') || 'null'); } catch(err){ e = null; }
-    if (!e || e.dia !== hoy() || !e.n || !e.cont) e = { dia: hoy(), n: {}, cont: {} };
+    if (!e || e.dia !== hoy() || !e.n || !e.cont) e = { dia: hoy(), n: {}, cont: {}, malos: {} };
+    if (!e.malos) e.malos = {};
     return e;
   }
   var ESTADO = cargarEstado();
@@ -107,7 +108,10 @@
 
   function normTel(t){
     var d = String(t).replace(/\D/g, "");
-    if (/^(044|045|521|52|44|45)?\d{10}$/.test(d)) return "+52" + d.slice(-10);
+    if (/^(044|045|521|52|44|45)?\d{10}$/.test(d)) {
+      var n = d.slice(-10);
+      if (/^[2-9]/.test(n)) return "+52" + n; // un número nacional mexicano no empieza por 0 ni por 1
+    }
     return null;
   }
   // Todos los teléfonos válidos del seller, sin repetidos
@@ -122,7 +126,7 @@
   // Números del seller que todavía no llegan a p intentos (un seller contactado no tiene pendientes)
   function pendientes(s, p){
     if (esContactado(s.id)) return [];
-    return telsDe(s).filter(function(n){ return intentos(s.id, n) < p; });
+    return telsDe(s).filter(function(n){ return !ESTADO.malos[clave(s.id, n)] && intentos(s.id, n) < p; });
   }
   function buscar(desde, p){
     chequeDia();
@@ -173,7 +177,7 @@
       if (vistos[nt]) return;
       vistos[nt] = 1;
       var n = intentos(s.id, nt), i = idx++;
-      html += '<div class="tel">📞 ' + esc(nt) + ' <span class="int">' + n + '/' + max + '</span>' + (n >= max ? ' (máximo)' : '') +
+      html += '<div class="tel">📞 ' + esc(nt) + ' <span class="int">' + n + '/' + max + '</span>' + (ESTADO.malos[clave(s.id, nt)] ? ' ✖ no arrancó' : (n >= max ? ' (máximo)' : '')) +
         (MODO === "manual" ? ' <button class="cp" onclick="llamarNumero(' + i + ')">Llamar</button>' : '') + '</div>';
     });
     if (esContactado(s.id)) html += '<div class="contactado">✔ Contactado: se saltan sus demás números</div>';
@@ -229,9 +233,23 @@
       msg(auto ? "Llamando a " + (s.nombre || s.id) + "…" : "");
       if (WD) clearTimeout(WD);
       WD = setTimeout(function(){
-        if (!EN_LLAMADA) {
-          log("La llamada no inició en 20 s");
-          if (RUN) pausar("Pausado: la llamada no inició. Revisa el micrófono y vuelve a iniciar.");
+        if (EN_LLAMADA) return;
+        WD = null;
+        var k = clave(s.id, num);
+        ESTADO.malos[k] = 1; guardarEstado();
+        FALLOS_SEGUIDOS++; FALLOS_RECIENTES.push(k);
+        log("La llamada a " + num + " no inició en 20 s: se marca como fallida y se salta");
+        uso("llamada_no_inicia", "seller=" + s.id);
+        if (RUN) {
+          if (FALLOS_SEGUIDOS >= 3) {
+            // si fallan 3 seguidas el problema es del micrófono o la conexión, no de los números: se les quita la marca
+            FALLOS_RECIENTES.forEach(function(x){ delete ESTADO.malos[x]; }); guardarEstado();
+            FALLOS_SEGUIDOS = 0; FALLOS_RECIENTES = [];
+            pausar("Pausado: fallaron 3 llamadas seguidas. Revisa el micrófono y la conexión, y vuelve a iniciar.");
+          } else { msg("No se pudo iniciar " + num + ", paso al siguiente…"); render(); avanzar(); }
+        } else {
+          msg("No se pudo iniciar la llamada a " + num + ". Puede que el número no sea válido, quedó marcado como fallido.");
+          render();
         }
       }, 20000);
     } catch(e){
@@ -251,6 +269,7 @@
   function llamarNumero(i){
     var s = COLA[pos]; if (!s) return;
     var num = telsDe(s)[i]; if (!num) return;
+    delete ESTADO.malos[clave(s.id, num)]; guardarEstado();
     if (intentos(s.id, num) >= MAXI() && !confirm("Este número ya se marcó " + intentos(s.id, num) + " veces. ¿Llamar de todos modos?")) return;
     llamarActual(false, num);
   }
@@ -345,7 +364,7 @@
     $('estado').textContent = "widget listo"; log("on_ready");
   });
   window.addEventListener("llapro_phonewidget_on_call_start", function(e){
-    EN_LLAMADA = true; if (WD) { clearTimeout(WD); WD = null; }
+    EN_LLAMADA = true; FALLOS_SEGUIDOS = 0; FALLOS_RECIENTES = []; if (WD) { clearTimeout(WD); WD = null; }
     log("call_start " + JSON.stringify(e.detail));
     uso("llamada_inicio", "seller=" + ((e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL) + " modo=" + MODO);
   });
