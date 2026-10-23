@@ -60,6 +60,8 @@
         <select id="maxi"><option>1</option><option selected>2</option><option>3</option></select>
         &nbsp; Pausa entre llamadas:
         <select id="pausa"><option value="3">3 s</option><option value="5" selected>5 s</option><option value="10">10 s</option></select>
+        &nbsp; Espera entre intentos al mismo número:
+        <select id="espera"><option value="0">0 (solo pruebas)</option><option value="5">5 min</option><option value="10">10 min</option><option value="15" selected>15 min</option><option value="30">30 min</option></select>
       </div>
       <button id="bIni" onclick="iniciarAuto()">▶ Iniciar</button>
       <button id="bPau" class="sec" onclick="pausar('Pausado')">⏸ Pausar</button>
@@ -87,8 +89,9 @@
   function cargarEstado(){
     var e = null;
     try { e = JSON.parse(localStorage.getItem('pdv_estado_v2') || 'null'); } catch(err){ e = null; }
-    if (!e || e.dia !== hoy() || !e.n || !e.cont) e = { dia: hoy(), n: {}, cont: {}, malos: {} };
+    if (!e || e.dia !== hoy() || !e.n || !e.cont) e = { dia: hoy(), n: {}, cont: {}, malos: {}, ult: {} };
     if (!e.malos) e.malos = {};
+    if (!e.ult) e.ult = {};
     return e;
   }
   var ESTADO = cargarEstado();
@@ -105,6 +108,7 @@
   function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
   function MAXI(){ return parseInt($('maxi').value, 10) || 2; }
   function PAUSA(){ return parseInt($('pausa').value, 10) || 5; }
+  function ESPERA(){ var v = parseInt($('espera').value, 10); return (isNaN(v) ? 15 : v) * 60000; }
 
   function normTel(t){
     var d = String(t).replace(/\D/g, "");
@@ -123,10 +127,31 @@
     });
     return out;
   }
-  // Números del seller que todavía no llegan a p intentos (un seller contactado no tiene pendientes)
+  // Milisegundos que faltan para poder volver a marcar este número (0 si ya se puede)
+  function faltaDe(id, n){
+    var u = ESTADO.ult[clave(id, n)] || 0;
+    return u ? Math.max(0, u + ESPERA() - Date.now()) : 0;
+  }
+  // Números del seller que todavía no llegan a p intentos y ya cumplieron la espera (un seller contactado no tiene pendientes)
   function pendientes(s, p){
     if (esContactado(s.id)) return [];
-    return telsDe(s).filter(function(n){ return !ESTADO.malos[clave(s.id, n)] && intentos(s.id, n) < p; });
+    return telsDe(s).filter(function(n){ return !ESTADO.malos[clave(s.id, n)] && intentos(s.id, n) < p && faltaDe(s.id, n) <= 0; });
+  }
+  // Lo que falta (en ms) para que algún número que aún tiene intentos disponibles cumpla la espera; null si no hay ninguno esperando
+  function esperaDe(s){
+    if (esContactado(s.id)) return null;
+    var min = null, max = MAXI();
+    telsDe(s).forEach(function(n){
+      if (ESTADO.malos[clave(s.id, n)]) return;
+      var c = intentos(s.id, n), f = faltaDe(s.id, n);
+      if (c > 0 && c < max && f > 0 && (min === null || f < min)) min = f;
+    });
+    return min;
+  }
+  function proximaEspera(){
+    var min = null;
+    COLA.forEach(function(s){ var f = esperaDe(s); if (f !== null && (min === null || f < min)) min = f; });
+    return min;
   }
   function buscar(desde, p){
     chequeDia();
@@ -177,7 +202,7 @@
       if (vistos[nt]) return;
       vistos[nt] = 1;
       var n = intentos(s.id, nt), i = idx++;
-      html += '<div class="tel">📞 ' + esc(nt) + ' <span class="int">' + n + '/' + max + '</span>' + (ESTADO.malos[clave(s.id, nt)] ? ' ✖ no arrancó' : (n >= max ? ' (máximo)' : '')) +
+      html += '<div class="tel">📞 ' + esc(nt) + ' <span class="int">' + n + '/' + max + '</span>' + (ESTADO.malos[clave(s.id, nt)] ? ' ✖ no arrancó' : (n >= max ? ' (máximo)' : (faltaDe(s.id, nt) > 0 ? ' · espera ' + Math.ceil(faltaDe(s.id, nt) / 60000) + ' min' : ''))) +
         (MODO === "manual" ? ' <button class="cp" onclick="llamarNumero(' + i + ')">Llamar</button>' : '') + '</div>';
     });
     if (esContactado(s.id)) html += '<div class="contactado">✔ Contactado: se saltan sus demás números</div>';
@@ -221,7 +246,8 @@
     var num = numForzado || siguienteNumero(s);
     if (!num) {
       log("Este seller no tiene números pendientes");
-      if (auto) avanzar(); else msg("Este seller ya llegó al máximo de intentos en todos sus números.");
+      if (auto) avanzar();
+      else { var fs = esperaDe(s); msg(fs !== null ? "El siguiente intento a este seller estará disponible en " + Math.ceil(fs / 60000) + " min." : "Este seller ya llegó al máximo de intentos en todos sus números."); }
       return;
     }
     try {
@@ -258,10 +284,39 @@
     }
   }
 
+  // Todos los números que quedan están esperando su siguiente intento: se espera y se reanuda solo
+  function esperarYReanudar(faltaMs){
+    var hasta = Date.now() + faltaMs;
+    uso("discador_espera", "min=" + Math.ceil(faltaMs / 60000));
+    limpiarTemporizadores();
+    var texto = function(){
+      var seg = Math.max(0, Math.ceil((hasta - Date.now()) / 1000));
+      return "Esperando para el siguiente intento: " + Math.floor(seg / 60) + " min " + ("0" + (seg % 60)).slice(-2) + " s (el discador sigue solo; puedes pausar)";
+    };
+    msg(texto()); render();
+    CD = setInterval(function(){
+      if (!RUN) { limpiarTemporizadores(); return; }
+      if (Date.now() < hasta) { msg(texto()); return; }
+      limpiarTemporizadores();
+      RONDA = 1;
+      var r2 = siguienteAuto(0);
+      if (!r2) {
+        var f2 = proximaEspera();
+        if (f2 !== null) { esperarYReanudar(f2); return; }
+        RUN = false; msg("Lista terminada ✔"); render(); return;
+      }
+      pos = r2.k; render(); llamarActual(true, r2.num);
+    }, 1000);
+  }
+
   function iniciarAuto(){
     RONDA = 1;
     var r = siguienteAuto(pos);
-    if (!r) { msg("No quedan números por llamar (todos llegaron al máximo, ya están contactados o no son válidos)."); return; }
+    if (!r) {
+      var f = proximaEspera();
+      if (f !== null) { RUN = true; uso("discador_auto_iniciar", "desde=" + (pos + 1)); render(); esperarYReanudar(f); return; }
+      msg("No quedan números por llamar (todos llegaron al máximo, ya están contactados o no son válidos)."); return;
+    }
     RUN = true; uso("discador_auto_iniciar", "desde=" + (pos + 1)); pos = r.k; render(); llamarActual(true, r.num);
   }
 
@@ -270,6 +325,8 @@
     var s = COLA[pos]; if (!s) return;
     var num = telsDe(s)[i]; if (!num) return;
     delete ESTADO.malos[clave(s.id, num)]; guardarEstado();
+    var f = faltaDe(s.id, num);
+    if (f > 0 && intentos(s.id, num) < MAXI() && !confirm("Este número se marcó hace poco. El siguiente intento recomendado es en " + Math.ceil(f / 60000) + " min. ¿Llamar de todos modos?")) return;
     if (intentos(s.id, num) >= MAXI() && !confirm("Este número ya se marcó " + intentos(s.id, num) + " veces. ¿Llamar de todos modos?")) return;
     llamarActual(false, num);
   }
@@ -287,7 +344,11 @@
   function avanzar(){
     var rondaAntes = RONDA;
     var r = siguienteAuto(pos);
-    if (!r) { RUN = false; limpiarTemporizadores(); msg("Lista terminada ✔"); render(); return; }
+    if (!r) {
+      var f = proximaEspera();
+      if (f !== null) { esperarYReanudar(f); return; }
+      RUN = false; limpiarTemporizadores(); msg("Lista terminada ✔"); render(); return;
+    }
     // si cambió la ronda, la siguiente llamada sale desde el primer seller; si no, desde el seller actual
     var desde = (RONDA !== rondaAntes) ? 0 : pos;
     var seg = PAUSA();
@@ -320,6 +381,7 @@
     Object.keys(ESTADO.n).forEach(function(k){ if (k.indexOf("prueba-") === 0) delete ESTADO.n[k]; });
     Object.keys(ESTADO.cont).forEach(function(k){ if (k.indexOf("prueba-") === 0) delete ESTADO.cont[k]; });
     guardarEstado();
+    $('espera').value = "0"; // en las pruebas no se espera entre intentos
     pos = 0; MODO = "auto"; RONDA = 1; msg("");
     log("Cola de prueba: " + COLA.length + " sellers, " + COLA.reduce(function(t, x){ return t + x.tels.length; }, 0) + " números. Pulsa Iniciar.");
     render();
@@ -342,6 +404,7 @@
     var d = e.data;
     if (d && d.type === "cola" && Array.isArray(d.items)) {
       pausar(""); COLA = d.items.slice(0, 500); pos = 0; RONDA = 1;
+      if ($('espera').value === "0") $('espera').value = "15"; // una lista real vuelve a la espera normal
       log("Lista recibida: " + COLA.length + " sellers"); uso("discador_lista", "sellers=" + COLA.length);
       render();
     }
@@ -376,7 +439,7 @@
     if (id && id !== "prueba-pdv-discador") {
       var raw = e.detail && e.detail.callTo;
       var num = (String(id) === String(ACTUAL) && ACTUAL_TEL) ? ACTUAL_TEL : (normTel(raw) || raw);
-      if (num) { chequeDia(); ESTADO.n[clave(id, num)] = intentos(id, num) + 1; guardarEstado(); }
+      if (num) { chequeDia(); ESTADO.n[clave(id, num)] = intentos(id, num) + 1; ESTADO.ult[clave(id, num)] = Date.now(); guardarEstado(); }
       render();
       if (RUN) avanzar();
     }
