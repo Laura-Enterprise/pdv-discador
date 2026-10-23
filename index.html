@@ -20,6 +20,8 @@
   .nombre { font-size:18px; font-weight:700; }
   .negocio { font-size:15px; font-weight:700; color:#0177FF; margin-bottom:2px; display:none; }
   button.cp { padding:2px 10px; font-size:12px; margin:0 0 0 8px; }
+  button.ok { background:#17A673; }
+  .contactado { color:#17A673; font-weight:700; margin:6px 0; }
   .tel { margin:6px 0; font-size:15px; }
   .int { display:inline-block; background:#fff; border-radius:12px; padding:2px 10px; font-size:12px; margin-left:8px; }
   #msg { margin:10px 0 0; font-weight:700; min-height:20px; color:#0177FF; }
@@ -44,6 +46,7 @@
     <div class="nombre" id="nombre"></div>
     <div class="prog" id="sid"></div>
     <div id="tels"></div>
+    <div style="margin:6px 0"><button class="ok" id="bCont" onclick="marcarContactado()">✔ Contactado</button></div>
 
     <div id="ctlManual">
       <button onclick="ant()" class="sec" id="bAnt">← Anterior</button>
@@ -53,7 +56,7 @@
 
     <div id="ctlAuto" style="display:none">
       <div class="cfg">
-        Máx. intentos por seller:
+        Intentos por número:
         <select id="maxi"><option>1</option><option selected>2</option><option>3</option></select>
         &nbsp; Pausa entre llamadas:
         <select id="pausa"><option value="3">3 s</option><option value="5" selected>5 s</option><option value="10">10 s</option></select>
@@ -66,7 +69,7 @@
 
   <details>
     <summary>Pruebas</summary>
-    <p style="margin:8px 0">Escribe un número tuyo con código de país y pulsa Llamar. Para probar el modo Automático, escribe varios separados por coma y pulsa «Probar en automático».</p>
+    <p style="margin:8px 0">Escribe un número tuyo con código de país y pulsa Llamar. Para probar el modo Automático, escribe varios separados por coma (cada uno es un seller) y pulsa «Probar en automático». Para un seller con varios teléfonos, separa los sellers con «;» y los teléfonos de cada uno con coma (ej.: +57a, +57b ; +57c).</p>
     <input id="numero" type="tel" placeholder="+57…" style="padding:10px;border:1px solid #C9C9C9;border-radius:8px;font-size:14px;width:340px">
     <button onclick="llamarPrueba()">Llamar a este número</button>
     <button onclick="colaPrueba()">Probar en automático</button>
@@ -76,10 +79,23 @@
 </main>
 
 <script>
-  var COLA = [], pos = 0, ACTUAL = null;
+  var COLA = [], pos = 0, ACTUAL = null, ACTUAL_TEL = null, RONDA = 1;
   var MODO = "manual", RUN = false, EN_LLAMADA = false, WD = null, CD = null;
-  var INT = {};
-  try { INT = JSON.parse(localStorage.getItem('pdv_intentos') || '{}'); } catch(e){ INT = {}; }
+
+  // Intentos por NÚMERO y sellers contactados. Se reinician cada día.
+  function hoy(){ var d = new Date(); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  function cargarEstado(){
+    var e = null;
+    try { e = JSON.parse(localStorage.getItem('pdv_estado_v2') || 'null'); } catch(err){ e = null; }
+    if (!e || e.dia !== hoy() || !e.n || !e.cont) e = { dia: hoy(), n: {}, cont: {} };
+    return e;
+  }
+  var ESTADO = cargarEstado();
+  function chequeDia(){ if (ESTADO.dia !== hoy()) ESTADO = cargarEstado(); }
+  function guardarEstado(){ try { localStorage.setItem('pdv_estado_v2', JSON.stringify(ESTADO)); } catch(err){} }
+  function clave(id, num){ return id + "|" + num; }
+  function intentos(id, num){ return ESTADO.n[clave(id, num)] || 0; }
+  function esContactado(id){ return !!ESTADO.cont[id]; }
 
   function $(id){ return document.getElementById(id); }
   function uso(evento, detalle){ if (window.opener) { try { window.opener.postMessage({ type: "uso", evento: evento, detalle: detalle || "" }, "*"); } catch(e){} } }
@@ -94,16 +110,40 @@
     if (/^(044|045|521|52|44|45)?\d{10}$/.test(d)) return "+52" + d.slice(-10);
     return null;
   }
-  function primerTel(s){
-    if (s.prueba) return s.tels[0];
-    var num = null;
-    (s.tels || []).some(function(t){ num = normTel(t); return !!num; });
-    return num;
+  // Todos los teléfonos válidos del seller, sin repetidos
+  function telsDe(s){
+    var out = [], vistos = {};
+    (s.tels || []).forEach(function(t){
+      var n = s.prueba ? t : normTel(t);
+      if (n && !vistos[n]) { vistos[n] = 1; out.push(n); }
+    });
+    return out;
   }
-  function elegible(s){ return !!primerTel(s) && (INT[s.id] || 0) < MAXI(); }
-  function buscarSig(desde){
-    for (var k = desde; k < COLA.length; k++) { if (elegible(COLA[k])) return k; }
-    return -1;
+  // Números del seller que todavía no llegan a p intentos (un seller contactado no tiene pendientes)
+  function pendientes(s, p){
+    if (esContactado(s.id)) return [];
+    return telsDe(s).filter(function(n){ return intentos(s.id, n) < p; });
+  }
+  function buscar(desde, p){
+    chequeDia();
+    for (var k = desde; k < COLA.length; k++) {
+      var ps = pendientes(COLA[k], p);
+      if (ps.length) return { k: k, num: ps[0] };
+    }
+    return null;
+  }
+  // Siguiente llamada del automático: primero lo que falta de la ronda actual; si no queda nada, pasa a la ronda siguiente desde el inicio
+  function siguienteAuto(desde){
+    var r = buscar(desde, Math.min(RONDA, MAXI()));
+    while (!r && RONDA < MAXI()) {
+      RONDA++; uso("discador_ronda", "ronda=" + RONDA);
+      r = buscar(0, Math.min(RONDA, MAXI()));
+    }
+    return r;
+  }
+  function siguienteNumero(s){
+    var ps = pendientes(s, MAXI());
+    return ps.length ? ps[0] : null;
   }
 
   function render(){
@@ -118,21 +158,27 @@
     $('bPau').disabled = !RUN;
     if (!hay) return;
     var s = COLA[pos];
-    $('prog').textContent = "Seller " + (pos + 1) + " de " + COLA.length + (s.filtro ? " · " + s.filtro : "");
+    $('prog').textContent = "Seller " + (pos + 1) + " de " + COLA.length + (s.filtro ? " · " + s.filtro : "") + (MODO === "auto" && RUN ? " · Ronda " + Math.min(RONDA, MAXI()) + " de " + MAXI() : "");
     var neg = (s.negocio || "").trim();
     $('negocio').textContent = neg;
     $('negocioRow').style.display = neg ? 'block' : 'none';
     $('bCopNeg').textContent = 'Copiar';
     $('nombre').textContent = s.nombre || "(sin nombre)";
     $('sid').textContent = "ID " + s.id;
-    var n = INT[s.id] || 0;
-    var html = "";
+    chequeDia();
+    var max = MAXI(), html = "", vistos = {}, idx = 0;
     (s.tels || []).forEach(function(t){
       var nt = s.prueba ? t : normTel(t);
-      html += '<div class="tel">📞 ' + esc(nt || t) + (nt ? "" : " (no válido)") + "</div>";
+      if (!nt) { html += '<div class="tel">📞 ' + esc(t) + ' (no válido)</div>'; return; }
+      if (vistos[nt]) return;
+      vistos[nt] = 1;
+      var n = intentos(s.id, nt), i = idx++;
+      html += '<div class="tel">📞 ' + esc(nt) + ' <span class="int">' + n + '/' + max + '</span>' + (n >= max ? ' (máximo)' : '') +
+        (MODO === "manual" ? ' <button class="cp" onclick="llamarNumero(' + i + ')">Llamar</button>' : '') + '</div>';
     });
-    html += '<div class="tel">Intentos: <span class="int">' + n + "</span>" + (n >= MAXI() ? " (llegó al máximo)" : "") + "</div>";
+    if (esContactado(s.id)) html += '<div class="contactado">✔ Contactado: se saltan sus demás números</div>';
     $('tels').innerHTML = html;
+    $('bCont').textContent = esContactado(s.id) ? '↩ Quitar contactado' : '✔ Contactado';
     $('bAnt').disabled = pos === 0;
     $('bSig').disabled = pos >= COLA.length - 1;
   }
@@ -166,16 +212,20 @@
     msg(motivo === "" ? "" : (motivo || "Pausado")); render();
   }
 
-  function llamarActual(auto){
+  function llamarActual(auto, numForzado){
     var s = COLA[pos]; if (!s) return;
-    var num = primerTel(s);
-    if (!num) { log("Este seller no tiene un teléfono válido"); if (auto) avanzar(); return; }
+    var num = numForzado || siguienteNumero(s);
+    if (!num) {
+      log("Este seller no tiene números pendientes");
+      if (auto) avanzar(); else msg("Este seller ya llegó al máximo de intentos en todos sus números.");
+      return;
+    }
     try {
-      ACTUAL = s.id; EN_LLAMADA = false;
+      ACTUAL = s.id; ACTUAL_TEL = num; EN_LLAMADA = false;
       var w = window.LlaProSdk("getWidget");
       w.maximize();
       w.startCall({ callTo: num, optionalData: { contactExternalId: String(s.id) } });
-      log("startCall a " + num + " (seller " + s.id + ")");
+      log("startCall a " + num + " (seller " + s.id + ", intento " + (intentos(s.id, num) + 1) + ")");
       msg(auto ? "Llamando a " + (s.nombre || s.id) + "…" : "");
       if (WD) clearTimeout(WD);
       WD = setTimeout(function(){
@@ -191,14 +241,36 @@
   }
 
   function iniciarAuto(){
-    var k = buscarSig(pos);
-    if (k < 0) { msg("No quedan sellers por llamar (todos llegaron al máximo o no tienen teléfono válido)."); return; }
-    RUN = true; uso("discador_auto_iniciar", "desde=" + (pos + 1)); pos = k; render(); llamarActual(true);
+    RONDA = 1;
+    var r = siguienteAuto(pos);
+    if (!r) { msg("No quedan números por llamar (todos llegaron al máximo, ya están contactados o no son válidos)."); return; }
+    RUN = true; uso("discador_auto_iniciar", "desde=" + (pos + 1)); pos = r.k; render(); llamarActual(true, r.num);
+  }
+
+  // Manual: llamar un número concreto del seller
+  function llamarNumero(i){
+    var s = COLA[pos]; if (!s) return;
+    var num = telsDe(s)[i]; if (!num) return;
+    if (intentos(s.id, num) >= MAXI() && !confirm("Este número ya se marcó " + intentos(s.id, num) + " veces. ¿Llamar de todos modos?")) return;
+    llamarActual(false, num);
+  }
+
+  // El agente marca (o quita) al seller como contactado: el automático se salta sus demás números
+  function marcarContactado(){
+    var s = COLA[pos]; if (!s) return;
+    if (esContactado(s.id)) { delete ESTADO.cont[s.id]; guardarEstado(); render(); return; }
+    ESTADO.cont[s.id] = 1; guardarEstado();
+    uso("marcar_contactado", "seller=" + s.id);
+    if (MODO === "manual" && pos < COLA.length - 1) { pos++; }
+    render();
   }
 
   function avanzar(){
-    var k = buscarSig(pos + 1);
-    if (k < 0) { RUN = false; limpiarTemporizadores(); msg("Lista terminada ✔"); render(); return; }
+    var rondaAntes = RONDA;
+    var r = siguienteAuto(pos);
+    if (!r) { RUN = false; limpiarTemporizadores(); msg("Lista terminada ✔"); render(); return; }
+    // si cambió la ronda, la siguiente llamada sale desde el primer seller; si no, desde el seller actual
+    var desde = (RONDA !== rondaAntes) ? 0 : pos;
     var seg = PAUSA();
     msg("Siguiente llamada en " + seg + " s…");
     CD = setInterval(function(){
@@ -206,21 +278,31 @@
       seg--;
       if (seg > 0) { msg("Siguiente llamada en " + seg + " s…"); return; }
       limpiarTemporizadores();
-      pos = k; render(); llamarActual(true);
+      // se vuelve a calcular por si el agente marcó un seller como contactado durante la pausa
+      var r2 = siguienteAuto(desde);
+      if (!r2) { RUN = false; msg("Lista terminada ✔"); render(); return; }
+      pos = r2.k; render(); llamarActual(true, r2.num);
     }, 1000);
   }
 
   // Cola de prueba: números escritos a mano (no quedan guardados en el código)
   function colaPrueba(){
-    var nums = ($('numero').value || "").split(/[,;\n]/).map(function(x){ return x.replace(/[\s\-()]/g, ""); }).filter(Boolean);
-    if (!nums.length) { log("Escribe al menos un número"); return; }
-    var malos = nums.filter(function(n){ return !/^\+\d{8,15}$/.test(n); });
+    var txt = $('numero').value || "";
+    // Con «;» o salto de línea: cada grupo es un seller y las comas separan sus teléfonos. Sin eso: cada coma es un seller.
+    var grupos = /[;\n]/.test(txt) ? txt.split(/[;\n]/) : txt.split(",");
+    var limpiar = function(x){ return x.replace(/[\s\-()]/g, ""); };
+    var sellers = grupos.map(function(g){ return g.split(",").map(limpiar).filter(Boolean); }).filter(function(a){ return a.length; });
+    if (!sellers.length) { log("Escribe al menos un número"); return; }
+    var malos = [];
+    sellers.forEach(function(a){ a.forEach(function(n){ if (!/^\+\d{8,15}$/.test(n)) malos.push(n); }); });
     if (malos.length) { log("Número no válido (usa +código de país y número): " + malos.join(", ")); return; }
     pausar("");
-    COLA = nums.map(function(n, i){ return { id: "prueba-" + (i + 1), nombre: "Prueba " + (i + 1), tels: [n], filtro: "Lista de prueba", prueba: true }; });
-    COLA.forEach(function(s){ delete INT[s.id]; });
-    pos = 0; MODO = "auto"; msg("");
-    log("Cola de prueba: " + COLA.length + " números. Pulsa Iniciar.");
+    COLA = sellers.map(function(a, i){ return { id: "prueba-" + (i + 1), nombre: "Prueba " + (i + 1), tels: a, filtro: "Lista de prueba", prueba: true }; });
+    Object.keys(ESTADO.n).forEach(function(k){ if (k.indexOf("prueba-") === 0) delete ESTADO.n[k]; });
+    Object.keys(ESTADO.cont).forEach(function(k){ if (k.indexOf("prueba-") === 0) delete ESTADO.cont[k]; });
+    guardarEstado();
+    pos = 0; MODO = "auto"; RONDA = 1; msg("");
+    log("Cola de prueba: " + COLA.length + " sellers, " + COLA.reduce(function(t, x){ return t + x.tels.length; }, 0) + " números. Pulsa Iniciar.");
     render();
   }
 
@@ -240,7 +322,7 @@
     if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin)) return;
     var d = e.data;
     if (d && d.type === "cola" && Array.isArray(d.items)) {
-      pausar(""); COLA = d.items.slice(0, 500); pos = 0;
+      pausar(""); COLA = d.items.slice(0, 500); pos = 0; RONDA = 1;
       log("Lista recibida: " + COLA.length + " sellers"); uso("discador_lista", "sellers=" + COLA.length);
       render();
     }
@@ -273,8 +355,9 @@
     uso("llamada_fin", "seller=" + ((e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL) + " modo=" + MODO);
     var id = (e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL;
     if (id && id !== "prueba-pdv-discador") {
-      INT[id] = (INT[id] || 0) + 1;
-      try { localStorage.setItem('pdv_intentos', JSON.stringify(INT)); } catch(err){}
+      var raw = e.detail && e.detail.callTo;
+      var num = (String(id) === String(ACTUAL) && ACTUAL_TEL) ? ACTUAL_TEL : (normTel(raw) || raw);
+      if (num) { chequeDia(); ESTADO.n[clave(id, num)] = intentos(id, num) + 1; guardarEstado(); }
       render();
       if (RUN) avanzar();
     }
