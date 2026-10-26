@@ -42,7 +42,7 @@
 </head>
 <body>
 <div id="pdv">
-<header>Discador PDV · Unlock <span style="font-size:11px;font-weight:400;opacity:.75;margin-left:8px">v26-10-26d</span></header>
+<header>Discador PDV · Unlock <span style="font-size:11px;font-weight:400;opacity:.75;margin-left:8px">v26-10-26e</span></header>
 <main>
   <p>Phone Widget de comOS. Estado: <span id="estado">cargando…</span></p>
 
@@ -58,7 +58,7 @@
     <div class="nombre" id="nombre"></div>
     <div class="prog" id="sid"></div>
     <div id="tels"></div>
-    <div style="margin:6px 0"><button class="ok" id="bCont" onclick="marcarContactado()">✔ Contactado</button></div>
+    <div style="margin:6px 0"><button class="ok" id="bCont" onclick="marcarContactado()">✔ Contactado</button><button class="sec" id="bHist" onclick="verHistorial()">📚 Llamadas anteriores</button></div>
 
     <div id="ctlManual">
       <button onclick="ant()" class="sec" id="bAnt">← Anterior</button>
@@ -98,7 +98,7 @@
 </main>
 <div id="modalLlam">
   <div class="caja">
-    <div class="cab"><span id="mlTitulo"></span><span><button class="sec cp" id="mlCopiar" onclick="copiarTexto()" style="display:none">Copiar</button><button class="sec cp" onclick="cerrarModal()">✕ Cerrar</button></span></div>
+    <div class="cab"><span id="mlTitulo"></span><span><button class="sec cp" id="mlVolver" onclick="verHistorial()" style="display:none">← Volver</button><button class="sec cp" id="mlCopiar" onclick="copiarTexto()" style="display:none">Copiar</button><button class="sec cp" onclick="cerrarModal()">✕ Cerrar</button></span></div>
     <div class="sub" id="mlSub"></div>
     <div id="mlAudio"></div>
     <div class="cuerpo" id="mlCuerpo"></div>
@@ -424,6 +424,7 @@
   window.addEventListener("message", function(e){
     if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin)) return;
     var d = e.data;
+    if (d && d.type === "resp_historial" && PEND[d.rid]) { var ph = PEND[d.rid]; delete PEND[d.rid]; mostrarHistorial(ph, d.r || {}); return; }
     if (d && d.type === "resp_llamada" && PEND[d.rid]) { var pp = PEND[d.rid]; delete PEND[d.rid]; mostrarRespuesta(pp, d.r || {}); return; }
     if (d && d.type === "cola" && Array.isArray(d.items)) {
       pausar(""); COLA = d.items.slice(0, 500); pos = 0; RONDA = 1;
@@ -514,12 +515,13 @@
     }
     el.innerHTML = html;
   }
-  function modalMsg(m){ $('mlCuerpo').textContent = m || ""; }
+  function modalMsg(m){ $('mlCuerpo').style.whiteSpace = "pre-wrap"; $('mlCuerpo').textContent = m || ""; }
   function abrirModal(titulo, it){
     MODAL_ITEM = it; MODAL_TEXTO = "";
     $('mlTitulo').textContent = titulo;
-    $('mlSub').textContent = it.seller + " · " + it.to + " · " + fmtHora(it.ini);
+    $('mlSub').textContent = it.cuando ? it.seller + " · " + it.cuando + " · " + (it.agente || "") : (it.to ? it.seller + " · " + it.to + " · " + fmtHora(it.ini) : it.seller);
     $('mlAudio').innerHTML = ""; $('mlCuerpo').textContent = ""; $('mlCopiar').style.display = "none";
+    $('mlVolver').style.display = it.callId ? "" : "none";
     $('modalLlam').style.display = "flex";
   }
   function cerrarModal(){
@@ -547,7 +549,7 @@
     var rid = Math.random().toString(36).slice(2);
     PEND[rid] = { it: it, modo: modo, intento: intento };
     modalMsg(intento ? "Buscando la llamada en comOS… (intento " + (intento + 1) + ")" : "Buscando la llamada…");
-    try { window.opener.postMessage({ type: "pedir_llamada", rid: rid, to: it.to, startMs: it.ini }, "*"); }
+    try { window.opener.postMessage({ type: "pedir_llamada", rid: rid, to: it.to, startMs: it.ini, callId: it.callId || "" }, "*"); }
     catch(e){ delete PEND[rid]; modalMsg("No se pudo contactar con el tablero."); return; }
     setTimeout(function(){ if (PEND[rid]) { delete PEND[rid]; if (MODAL_ITEM === it) modalMsg("El tablero no respondió. Cierra esta ventana y vuelve a pulsar el botón."); } }, 45000);
   }
@@ -572,6 +574,54 @@
       MODAL_TEXTO = r.texto; modalMsg(r.texto); $('mlCopiar').style.display = "";
     }
   }
+
+  // ---- Llamadas anteriores al mismo seller (de los últimos días) ----
+  var HIST_SELLER = null;
+  function verHistorial(){
+    var s = HIST_SELLER && MODAL_ITEM && MODAL_ITEM.callId ? HIST_SELLER : COLA[pos];
+    if (!s) return;
+    HIST_SELLER = s;
+    abrirModal("📚 Llamadas anteriores", { seller: (s.negocio ? s.negocio + " · " : "") + (s.nombre || s.id), to: "", ini: Date.now() });
+    MODAL_MODO = "historial";
+    uso("ver_historial", "seller=" + s.id);
+    pedirHistorial(s);
+  }
+  function pedirHistorial(s){
+    if (!window.opener) { modalMsg("Abre el discador desde el tablero para ver las llamadas anteriores."); return; }
+    var rid = Math.random().toString(36).slice(2), it = MODAL_ITEM;
+    PEND[rid] = { it: it, modo: "historial" };
+    modalMsg("Buscando llamadas anteriores…");
+    try { window.opener.postMessage({ type: "pedir_historial", rid: rid, tels: telsDe(s) }, "*"); }
+    catch(e){ delete PEND[rid]; modalMsg("No se pudo contactar con el tablero."); return; }
+    setTimeout(function(){ if (PEND[rid]) { delete PEND[rid]; if (MODAL_ITEM === it) modalMsg("El tablero no respondió. Cierra esta ventana y vuelve a pulsar el botón."); } }, 45000);
+  }
+  function verLlamadaDeHistorial(c, modo, base){
+    var it = { seller: base.seller, to: c.tel, ini: Date.now(), callId: c.callId, cuando: c.cuando, agente: c.agente };
+    abrirModal(modo === "audio" ? "▶ Audio de la llamada" : "📝 Transcripción de la llamada", it);
+    MODAL_MODO = modo;
+    uso(modo === "audio" ? "ver_audio" : "ver_transcripcion", "historial");
+    pedirLlamada(it, modo, 0);
+  }
+  function mostrarHistorial(p, r){
+    if (MODAL_ITEM !== p.it || MODAL_MODO !== "historial") return;
+    if (r.estado !== "listo") { modalMsg("No se pudo consultar: " + (r.mensaje || "error desconocido")); return; }
+    var ll = r.llamadas || [];
+    if (!ll.length) { modalMsg("No hay llamadas anteriores a los teléfonos de este seller en los últimos días."); return; }
+    var cuerpo = $('mlCuerpo'); cuerpo.style.whiteSpace = "normal"; cuerpo.innerHTML = "";
+    ll.forEach(function(c){
+      var d = document.createElement("div"); d.className = "llam";
+      var conecto = c.duracion >= 5;
+      d.innerHTML = '<span class="t"><b>' + esc(c.cuando) + '</b> · ' + esc(c.agente) + ' · ' + (conecto ? Math.round(c.duracion) + ' s' : 'no conectó') + '<br>' + esc(c.tel) + (c.resumen ? '<br><i>' + esc(c.resumen) + '</i>' : '') + '</span>';
+      if (conecto) {
+        var b1 = document.createElement("button"); b1.textContent = "📝 Transcripción"; b1.onclick = function(){ verLlamadaDeHistorial(c, "texto", p.it); };
+        var b2 = document.createElement("button"); b2.textContent = "▶ Audio"; b2.onclick = function(){ verLlamadaDeHistorial(c, "audio", p.it); };
+        d.appendChild(b1); d.appendChild(b2);
+      }
+      cuerpo.appendChild(d);
+    });
+    if (r.total > ll.length) { var m = document.createElement("div"); m.className = "prog"; m.textContent = "Se muestran las " + ll.length + " más recientes de " + r.total + "."; cuerpo.appendChild(m); }
+  }
+
   renderLlamadas();
 
   render();
