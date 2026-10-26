@@ -33,7 +33,7 @@
 </head>
 <body>
 <div id="pdv">
-<header>Discador PDV · Unlock</header>
+<header>Discador PDV · Unlock <span style="font-size:11px;font-weight:400;opacity:.75;margin-left:8px">v26-10-26a</span></header>
 <main>
   <p>Phone Widget de comOS. Estado: <span id="estado">cargando…</span></p>
 
@@ -403,7 +403,6 @@
     var d = e.data;
     if (d && d.type === "cola" && Array.isArray(d.items)) {
       pausar(""); COLA = d.items.slice(0, 500); pos = 0; RONDA = 1;
-      if ($('espera').value === "0") $('espera').value = "15"; // una lista real vuelve a la espera normal
       log("Lista recibida: " + COLA.length + " sellers"); uso("discador_lista", "sellers=" + COLA.length);
       render();
     }
