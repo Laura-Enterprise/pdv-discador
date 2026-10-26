@@ -30,51 +30,51 @@
 </style>
 </head>
 <body>
-<header>Discador PDV ¬∑ Unlock</header>
+<header>Discador PDV · Unlock</header>
 <main>
-  <p>Phone Widget de comOS. Estado: <span id="estado">cargando‚Ä¶</span></p>
+  <p>Phone Widget de comOS. Estado: <span id="estado">cargando…</span></p>
 
-  <div id="vacio">Abre este discador desde el tablero: filtra tus sellers y pulsa el bot√≥n para llamar la lista.</div>
+  <div id="vacio">Abre este discador desde el tablero: filtra tus sellers y pulsa el botón para llamar la lista.</div>
 
   <div id="cola">
     <div style="margin-bottom:10px">
       <button id="mManual" onclick="setModo('manual')">Manual</button>
-      <button id="mAuto" class="sec" onclick="setModo('auto')">Autom√°tico</button>
+      <button id="mAuto" class="sec" onclick="setModo('auto')">Automático</button>
     </div>
     <div class="prog" id="prog"></div>
     <div class="negocio" id="negocioRow"><span id="negocio"></span><button class="cp" id="bCopNeg" onclick="copiarNegocio()">Copiar</button></div>
     <div class="nombre" id="nombre"></div>
     <div class="prog" id="sid"></div>
     <div id="tels"></div>
-    <div style="margin:6px 0"><button class="ok" id="bCont" onclick="marcarContactado()">‚úî Contactado</button></div>
+    <div style="margin:6px 0"><button class="ok" id="bCont" onclick="marcarContactado()">✔ Contactado</button></div>
 
     <div id="ctlManual">
-      <button onclick="ant()" class="sec" id="bAnt">‚Üê Anterior</button>
+      <button onclick="ant()" class="sec" id="bAnt">← Anterior</button>
       <button onclick="llamarActual(false)" id="bLlamar">Llamar</button>
-      <button onclick="sig()" class="sec" id="bSig">Siguiente ‚Üí</button>
+      <button onclick="sig()" class="sec" id="bSig">Siguiente →</button>
     </div>
 
     <div id="ctlAuto" style="display:none">
       <div class="cfg">
-        Intentos por n√∫mero:
+        Intentos por número:
         <select id="maxi"><option>1</option><option selected>2</option><option>3</option></select>
         &nbsp; Pausa entre llamadas:
         <select id="pausa"><option value="3">3 s</option><option value="5" selected>5 s</option><option value="10">10 s</option></select>
-        &nbsp; Espera entre intentos al mismo n√∫mero:
+        &nbsp; Espera entre intentos al mismo número:
         <select id="espera"><option value="0" selected>Sin espera</option><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option></select>
       </div>
-      <button id="bIni" onclick="iniciarAuto()">‚ñ∂ Iniciar</button>
-      <button id="bPau" class="sec" onclick="pausar('Pausado')">‚è∏ Pausar</button>
+      <button id="bIni" onclick="iniciarAuto()">▶ Iniciar</button>
+      <button id="bPau" class="sec" onclick="pausar('Pausado')">⏸ Pausar</button>
     </div>
     <div id="msg"></div>
   </div>
 
   <details>
     <summary>Pruebas</summary>
-    <p style="margin:8px 0">Escribe un n√∫mero tuyo con c√≥digo de pa√≠s y pulsa Llamar. Para probar el modo Autom√°tico, escribe varios separados por coma (cada uno es un seller) y pulsa ¬´Probar en autom√°tico¬ª. Para un seller con varios tel√©fonos, separa los sellers con ¬´;¬ª y los tel√©fonos de cada uno con coma (ej.: +57a, +57b ; +57c).</p>
-    <input id="numero" type="tel" placeholder="+57‚Ä¶" style="padding:10px;border:1px solid #C9C9C9;border-radius:8px;font-size:14px;width:340px">
-    <button onclick="llamarPrueba()">Llamar a este n√∫mero</button>
-    <button onclick="colaPrueba()">Probar en autom√°tico</button>
+    <p style="margin:8px 0">Escribe un número tuyo con código de país y pulsa Llamar. Para probar el modo Automático, escribe varios separados por coma (cada uno es un seller) y pulsa «Probar en automático». Para un seller con varios teléfonos, separa los sellers con «;» y los teléfonos de cada uno con coma (ej.: +57a, +57b ; +57c).</p>
+    <input id="numero" type="tel" placeholder="+57…" style="padding:10px;border:1px solid #C9C9C9;border-radius:8px;font-size:14px;width:340px">
+    <button onclick="llamarPrueba()">Llamar a este número</button>
+    <button onclick="colaPrueba()">Probar en automático</button>
     <h4>Registro</h4>
     <pre id="log"></pre>
   </details>
@@ -84,7 +84,7 @@
   var COLA = [], pos = 0, ACTUAL = null, ACTUAL_TEL = null, RONDA = 1, FALLOS_SEGUIDOS = 0, FALLOS_RECIENTES = [];
   var MODO = "manual", RUN = false, EN_LLAMADA = false, WD = null, CD = null;
 
-  // Intentos por N√öMERO y sellers contactados. Se reinician cada d√≠a.
+  // Intentos por NÚMERO y sellers contactados. Se reinician cada día.
   function hoy(){ var d = new Date(); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
   function cargarEstado(){
     var e = null;
@@ -114,11 +114,11 @@
     var d = String(t).replace(/\D/g, "");
     if (/^(044|045|521|52|44|45)?\d{10}$/.test(d)) {
       var n = d.slice(-10);
-      if (/^[2-9]/.test(n)) return "+52" + n; // un n√∫mero nacional mexicano no empieza por 0 ni por 1
+      if (/^[2-9]/.test(n)) return "+52" + n; // un número nacional mexicano no empieza por 0 ni por 1
     }
     return null;
   }
-  // Todos los tel√©fonos v√°lidos del seller, sin repetidos
+  // Todos los teléfonos válidos del seller, sin repetidos
   function telsDe(s){
     var out = [], vistos = {};
     (s.tels || []).forEach(function(t){
@@ -127,17 +127,17 @@
     });
     return out;
   }
-  // Milisegundos que faltan para poder volver a marcar este n√∫mero (0 si ya se puede)
+  // Milisegundos que faltan para poder volver a marcar este número (0 si ya se puede)
   function faltaDe(id, n){
     var u = ESTADO.ult[clave(id, n)] || 0;
     return u ? Math.max(0, u + ESPERA() - Date.now()) : 0;
   }
-  // N√∫meros del seller que todav√≠a no llegan a p intentos y ya cumplieron la espera (un seller contactado no tiene pendientes)
+  // Números del seller que todavía no llegan a p intentos y ya cumplieron la espera (un seller contactado no tiene pendientes)
   function pendientes(s, p){
     if (esContactado(s.id)) return [];
     return telsDe(s).filter(function(n){ return !ESTADO.malos[clave(s.id, n)] && intentos(s.id, n) < p && faltaDe(s.id, n) <= 0; });
   }
-  // Lo que falta (en ms) para que alg√∫n n√∫mero que a√∫n tiene intentos disponibles cumpla la espera; null si no hay ninguno esperando
+  // Lo que falta (en ms) para que algún número que aún tiene intentos disponibles cumpla la espera; null si no hay ninguno esperando
   function esperaDe(s){
     if (esContactado(s.id)) return null;
     var min = null, max = MAXI();
@@ -161,7 +161,7 @@
     }
     return null;
   }
-  // Siguiente llamada del autom√°tico: se termina un seller (todos sus n√∫meros, MAXI intentos cada uno, un n√∫mero tras otro) y reci√©n ah√≠ pasa al siguiente
+  // Siguiente llamada del automático: se termina un seller (todos sus números, MAXI intentos cada uno, un número tras otro) y recién ahí pasa al siguiente
   function siguienteAuto(desde){
     return buscar(desde, MAXI());
   }
@@ -182,7 +182,7 @@
     $('bPau').disabled = !RUN;
     if (!hay) return;
     var s = COLA[pos];
-    $('prog').textContent = "Seller " + (pos + 1) + " de " + COLA.length + (s.filtro ? " ¬∑ " + s.filtro : "") + "";
+    $('prog').textContent = "Seller " + (pos + 1) + " de " + COLA.length + (s.filtro ? " · " + s.filtro : "") + "";
     var neg = (s.negocio || "").trim();
     $('negocio').textContent = neg;
     $('negocioRow').style.display = neg ? 'block' : 'none';
@@ -193,16 +193,16 @@
     var max = MAXI(), html = "", vistos = {}, idx = 0;
     (s.tels || []).forEach(function(t){
       var nt = s.prueba ? t : normTel(t);
-      if (!nt) { html += '<div class="tel">üìû ' + esc(t) + ' (no v√°lido)</div>'; return; }
+      if (!nt) { html += '<div class="tel">📞 ' + esc(t) + ' (no válido)</div>'; return; }
       if (vistos[nt]) return;
       vistos[nt] = 1;
       var n = intentos(s.id, nt), i = idx++;
-      html += '<div class="tel">üìû ' + esc(nt) + ' <span class="int">' + n + '/' + max + '</span>' + (ESTADO.malos[clave(s.id, nt)] ? ' ‚úñ no arranc√≥' : (n >= max ? ' (m√°ximo)' : (faltaDe(s.id, nt) > 0 ? ' ¬∑ espera ' + Math.ceil(faltaDe(s.id, nt) / 60000) + ' min' : ''))) +
+      html += '<div class="tel">📞 ' + esc(nt) + ' <span class="int">' + n + '/' + max + '</span>' + (ESTADO.malos[clave(s.id, nt)] ? ' ✖ no arrancó' : (n >= max ? ' (máximo)' : (faltaDe(s.id, nt) > 0 ? ' · espera ' + Math.ceil(faltaDe(s.id, nt) / 60000) + ' min' : ''))) +
         (MODO === "manual" ? ' <button class="cp" onclick="llamarNumero(' + i + ')">Llamar</button>' : '') + '</div>';
     });
-    if (esContactado(s.id)) html += '<div class="contactado">‚úî Contactado: se saltan sus dem√°s n√∫meros</div>';
+    if (esContactado(s.id)) html += '<div class="contactado">✔ Contactado: se saltan sus demás números</div>';
     $('tels').innerHTML = html;
-    $('bCont').textContent = esContactado(s.id) ? '‚Ü© Quitar contactado' : '‚úî Contactado';
+    $('bCont').textContent = esContactado(s.id) ? '↩ Quitar contactado' : '✔ Contactado';
     $('bAnt').disabled = pos === 0;
     $('bSig').disabled = pos >= COLA.length - 1;
   }
@@ -215,7 +215,7 @@
   function copiarNegocio(){
     var txt = ($('negocio').textContent || "").trim();
     if (!txt) return;
-    var listo = function(){ $('bCopNeg').textContent = '¬°Copiado!'; uso("copiar_negocio", ""); setTimeout(function(){ $('bCopNeg').textContent = 'Copiar'; }, 1500); };
+    var listo = function(){ $('bCopNeg').textContent = '¡Copiado!'; uso("copiar_negocio", ""); setTimeout(function(){ $('bCopNeg').textContent = 'Copiar'; }, 1500); };
     var respaldo = function(){
       var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
       try { document.execCommand('copy'); listo(); } catch(e){ log("No se pudo copiar: " + e); }
@@ -240,9 +240,9 @@
     var s = COLA[pos]; if (!s) return;
     var num = numForzado || siguienteNumero(s);
     if (!num) {
-      log("Este seller no tiene n√∫meros pendientes");
+      log("Este seller no tiene números pendientes");
       if (auto) avanzar();
-      else { var fs = esperaDe(s); msg(fs !== null ? "El siguiente intento a este seller estar√° disponible en " + Math.ceil(fs / 60000) + " min." : "Este seller ya lleg√≥ al m√°ximo de intentos en todos sus n√∫meros."); }
+      else { var fs = esperaDe(s); msg(fs !== null ? "El siguiente intento a este seller estará disponible en " + Math.ceil(fs / 60000) + " min." : "Este seller ya llegó al máximo de intentos en todos sus números."); }
       return;
     }
     try {
@@ -251,7 +251,7 @@
       w.maximize();
       w.startCall({ callTo: num, optionalData: { contactExternalId: String(s.id) } });
       log("startCall a " + num + " (seller " + s.id + ", intento " + (intentos(s.id, num) + 1) + ")");
-      msg(auto ? "Llamando a " + (s.nombre || s.id) + "‚Ä¶" : "");
+      msg(auto ? "Llamando a " + (s.nombre || s.id) + "…" : "");
       if (WD) clearTimeout(WD);
       WD = setTimeout(function(){
         if (EN_LLAMADA) return;
@@ -259,17 +259,17 @@
         var k = clave(s.id, num);
         ESTADO.malos[k] = 1; guardarEstado();
         FALLOS_SEGUIDOS++; FALLOS_RECIENTES.push(k);
-        log("La llamada a " + num + " no inici√≥ en 20 s: se marca como fallida y se salta");
+        log("La llamada a " + num + " no inició en 20 s: se marca como fallida y se salta");
         uso("llamada_no_inicia", "seller=" + s.id);
         if (RUN) {
           if (FALLOS_SEGUIDOS >= 3) {
-            // si fallan 3 seguidas el problema es del micr√≥fono o la conexi√≥n, no de los n√∫meros: se les quita la marca
+            // si fallan 3 seguidas el problema es del micrófono o la conexión, no de los números: se les quita la marca
             FALLOS_RECIENTES.forEach(function(x){ delete ESTADO.malos[x]; }); guardarEstado();
             FALLOS_SEGUIDOS = 0; FALLOS_RECIENTES = [];
-            pausar("Pausado: fallaron 3 llamadas seguidas. Revisa el micr√≥fono y la conexi√≥n, y vuelve a iniciar.");
-          } else { msg("No se pudo iniciar " + num + ", paso al siguiente‚Ä¶"); render(); avanzar(); }
+            pausar("Pausado: fallaron 3 llamadas seguidas. Revisa el micrófono y la conexión, y vuelve a iniciar.");
+          } else { msg("No se pudo iniciar " + num + ", paso al siguiente…"); render(); avanzar(); }
         } else {
-          msg("No se pudo iniciar la llamada a " + num + ". Puede que el n√∫mero no sea v√°lido, qued√≥ marcado como fallido.");
+          msg("No se pudo iniciar la llamada a " + num + ". Puede que el número no sea válido, quedó marcado como fallido.");
           render();
         }
       }, 20000);
@@ -279,7 +279,7 @@
     }
   }
 
-  // Todos los n√∫meros que quedan est√°n esperando su siguiente intento: se espera y se reanuda solo
+  // Todos los números que quedan están esperando su siguiente intento: se espera y se reanuda solo
   function esperarYReanudar(faltaMs){
     var hasta = Date.now() + faltaMs;
     uso("discador_espera", "min=" + Math.ceil(faltaMs / 60000));
@@ -298,7 +298,7 @@
       if (!r2) {
         var f2 = proximaEspera();
         if (f2 !== null) { esperarYReanudar(f2); return; }
-        RUN = false; msg("Lista terminada ‚úî"); render(); return;
+        RUN = false; msg("Lista terminada ✔"); render(); return;
       }
       pos = r2.k; render(); llamarActual(true, r2.num);
     }, 1000);
@@ -310,23 +310,23 @@
     if (!r) {
       var f = proximaEspera();
       if (f !== null) { RUN = true; uso("discador_auto_iniciar", "desde=" + (pos + 1)); render(); esperarYReanudar(f); return; }
-      msg("No quedan n√∫meros por llamar (todos llegaron al m√°ximo, ya est√°n contactados o no son v√°lidos)."); return;
+      msg("No quedan números por llamar (todos llegaron al máximo, ya están contactados o no son válidos)."); return;
     }
     RUN = true; uso("discador_auto_iniciar", "desde=" + (pos + 1)); pos = r.k; render(); llamarActual(true, r.num);
   }
 
-  // Manual: llamar un n√∫mero concreto del seller
+  // Manual: llamar un número concreto del seller
   function llamarNumero(i){
     var s = COLA[pos]; if (!s) return;
     var num = telsDe(s)[i]; if (!num) return;
     delete ESTADO.malos[clave(s.id, num)]; guardarEstado();
     var f = faltaDe(s.id, num);
-    if (f > 0 && intentos(s.id, num) < MAXI() && !confirm("Este n√∫mero se marc√≥ hace poco. El siguiente intento recomendado es en " + Math.ceil(f / 60000) + " min. ¬øLlamar de todos modos?")) return;
-    if (intentos(s.id, num) >= MAXI() && !confirm("Este n√∫mero ya se marc√≥ " + intentos(s.id, num) + " veces. ¬øLlamar de todos modos?")) return;
+    if (f > 0 && intentos(s.id, num) < MAXI() && !confirm("Este número se marcó hace poco. El siguiente intento recomendado es en " + Math.ceil(f / 60000) + " min. ¿Llamar de todos modos?")) return;
+    if (intentos(s.id, num) >= MAXI() && !confirm("Este número ya se marcó " + intentos(s.id, num) + " veces. ¿Llamar de todos modos?")) return;
     llamarActual(false, num);
   }
 
-  // El agente marca (o quita) al seller como contactado: el autom√°tico se salta sus dem√°s n√∫meros
+  // El agente marca (o quita) al seller como contactado: el automático se salta sus demás números
   function marcarContactado(){
     var s = COLA[pos]; if (!s) return;
     if (esContactado(s.id)) { delete ESTADO.cont[s.id]; guardarEstado(); render(); return; }
@@ -342,35 +342,35 @@
     if (!r) {
       var f = proximaEspera();
       if (f !== null) { esperarYReanudar(f); return; }
-      RUN = false; limpiarTemporizadores(); msg("Lista terminada ‚úî"); render(); return;
+      RUN = false; limpiarTemporizadores(); msg("Lista terminada ✔"); render(); return;
     }
-    // si cambi√≥ la ronda, la siguiente llamada sale desde el primer seller; si no, desde el seller actual
+    // si cambió la ronda, la siguiente llamada sale desde el primer seller; si no, desde el seller actual
     var desde = (RONDA !== rondaAntes) ? 0 : pos;
     var seg = PAUSA();
-    msg("Siguiente llamada en " + seg + " s‚Ä¶");
+    msg("Siguiente llamada en " + seg + " s…");
     CD = setInterval(function(){
       if (!RUN) { limpiarTemporizadores(); return; }
       seg--;
-      if (seg > 0) { msg("Siguiente llamada en " + seg + " s‚Ä¶"); return; }
+      if (seg > 0) { msg("Siguiente llamada en " + seg + " s…"); return; }
       limpiarTemporizadores();
-      // se vuelve a calcular por si el agente marc√≥ un seller como contactado durante la pausa
+      // se vuelve a calcular por si el agente marcó un seller como contactado durante la pausa
       var r2 = siguienteAuto(desde);
-      if (!r2) { RUN = false; msg("Lista terminada ‚úî"); render(); return; }
+      if (!r2) { RUN = false; msg("Lista terminada ✔"); render(); return; }
       pos = r2.k; render(); llamarActual(true, r2.num);
     }, 1000);
   }
 
-  // Cola de prueba: n√∫meros escritos a mano (no quedan guardados en el c√≥digo)
+  // Cola de prueba: números escritos a mano (no quedan guardados en el código)
   function colaPrueba(){
     var txt = $('numero').value || "";
-    // Con ¬´;¬ª o salto de l√≠nea: cada grupo es un seller y las comas separan sus tel√©fonos. Sin eso: cada coma es un seller.
+    // Con «;» o salto de línea: cada grupo es un seller y las comas separan sus teléfonos. Sin eso: cada coma es un seller.
     var grupos = /[;\n]/.test(txt) ? txt.split(/[;\n]/) : txt.split(",");
     var limpiar = function(x){ return x.replace(/[\s\-()]/g, ""); };
     var sellers = grupos.map(function(g){ return g.split(",").map(limpiar).filter(Boolean); }).filter(function(a){ return a.length; });
-    if (!sellers.length) { log("Escribe al menos un n√∫mero"); return; }
+    if (!sellers.length) { log("Escribe al menos un número"); return; }
     var malos = [];
     sellers.forEach(function(a){ a.forEach(function(n){ if (!/^\+\d{8,15}$/.test(n)) malos.push(n); }); });
-    if (malos.length) { log("N√∫mero no v√°lido (usa +c√≥digo de pa√≠s y n√∫mero): " + malos.join(", ")); return; }
+    if (malos.length) { log("Número no válido (usa +código de país y número): " + malos.join(", ")); return; }
     pausar("");
     COLA = sellers.map(function(a, i){ return { id: "prueba-" + (i + 1), nombre: "Prueba " + (i + 1), tels: a, filtro: "Lista de prueba", prueba: true }; });
     Object.keys(ESTADO.n).forEach(function(k){ if (k.indexOf("prueba-") === 0) delete ESTADO.n[k]; });
@@ -378,14 +378,14 @@
     guardarEstado();
     $('espera').value = "0"; // en las pruebas no se espera entre intentos
     pos = 0; MODO = "auto"; RONDA = 1; msg("");
-    log("Cola de prueba: " + COLA.length + " sellers, " + COLA.reduce(function(t, x){ return t + x.tels.length; }, 0) + " n√∫meros. Pulsa Iniciar.");
+    log("Cola de prueba: " + COLA.length + " sellers, " + COLA.reduce(function(t, x){ return t + x.tels.length; }, 0) + " números. Pulsa Iniciar.");
     render();
   }
 
   function llamarPrueba(){
     var n = ($('numero').value || "").replace(/[\s\-()]/g, "");
-    if (!/^\+\d{8,15}$/.test(n)) { log("N√∫mero no v√°lido. Usa el formato +57XXXXXXXXXX"); return; }
-    if (!confirm("¬øLlamar ahora a " + n + "?")) { log("Llamada cancelada"); return; }
+    if (!/^\+\d{8,15}$/.test(n)) { log("Número no válido. Usa el formato +57XXXXXXXXXX"); return; }
+    if (!confirm("¿Llamar ahora a " + n + "?")) { log("Llamada cancelada"); return; }
     try {
       window.LlaProSdk("getWidget").maximize();
       window.LlaProSdk("getWidget").startCall({ callTo: n, optionalData: { contactExternalId: "prueba-pdv-discador" } });
