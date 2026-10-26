@@ -29,11 +29,20 @@
   #msg { margin:10px 0 0; font-weight:700; min-height:20px; color:#0177FF; }
   .cfg { font-size:13px; margin:8px 0; }
   #pdv details { margin-top:14px; }
+  #pdv .llam { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:7px 0; border-bottom:1px solid #EBEAEA; font-size:13px; }
+  #pdv .llam .t { flex:1 1 170px; }
+  #pdv .llam button { padding:4px 10px; font-size:12px; margin:0; }
+  #pdv #modalLlam { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.45); z-index:2147483000; align-items:center; justify-content:center; }
+  #pdv #modalLlam .caja { background:#fff; border-radius:12px; width:600px; max-width:92vw; max-height:82vh; display:flex; flex-direction:column; padding:16px 18px; box-shadow:0 8px 30px rgba(0,0,0,.3); }
+  #pdv #modalLlam .cab { display:flex; align-items:center; justify-content:space-between; font-weight:700; font-size:16px; margin-bottom:6px; }
+  #pdv #modalLlam .sub { font-size:12px; color:#959595; margin-bottom:8px; }
+  #pdv #modalLlam .cuerpo { overflow:auto; font-size:14px; line-height:1.55; white-space:pre-wrap; }
+  #pdv #modalLlam audio { width:100%; margin:6px 0 10px; }
 </style>
 </head>
 <body>
 <div id="pdv">
-<header>Discador PDV · Unlock <span style="font-size:11px;font-weight:400;opacity:.75;margin-left:8px">v26-10-26a</span></header>
+<header>Discador PDV · Unlock <span style="font-size:11px;font-weight:400;opacity:.75;margin-left:8px">v26-10-26c</span></header>
 <main>
   <p>Phone Widget de comOS. Estado: <span id="estado">cargando…</span></p>
 
@@ -64,13 +73,18 @@
         &nbsp; Pausa entre llamadas:
         <select id="pausa"><option value="3">3 s</option><option value="5" selected>5 s</option><option value="10">10 s</option></select>
         &nbsp; Espera entre intentos al mismo número:
-        <select id="espera"><option value="0" selected>Sin espera</option><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option></select>
+        <select id="espera"><option value="0" selected>Sin espera</option><option value="10">10 s</option><option value="30">30 s</option><option value="60">1 min</option><option value="300">5 min</option><option value="600">10 min</option><option value="900">15 min</option><option value="1800">30 min</option></select>
       </div>
       <button id="bIni" onclick="iniciarAuto()">▶ Iniciar</button>
       <button id="bPau" class="sec" onclick="pausar('Pausado')">⏸ Pausar</button>
     </div>
     <div id="msg"></div>
   </div>
+
+  <details id="misLlam" open>
+    <summary>Mis llamadas de hoy</summary>
+    <div id="llamLista" style="margin-top:8px"></div>
+  </details>
 
   <details>
     <summary>Pruebas</summary>
@@ -82,6 +96,14 @@
     <pre id="log"></pre>
   </details>
 </main>
+<div id="modalLlam">
+  <div class="caja">
+    <div class="cab"><span id="mlTitulo"></span><span><button class="sec cp" id="mlCopiar" onclick="copiarTexto()" style="display:none">Copiar</button><button class="sec cp" onclick="cerrarModal()">✕ Cerrar</button></span></div>
+    <div class="sub" id="mlSub"></div>
+    <div id="mlAudio"></div>
+    <div class="cuerpo" id="mlCuerpo"></div>
+  </div>
+</div>
 </div>
 
 <script>
@@ -112,7 +134,8 @@
   function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
   function MAXI(){ return parseInt($('maxi').value, 10) || 2; }
   function PAUSA(){ return parseInt($('pausa').value, 10) || 5; }
-  function ESPERA(){ var v = parseInt($('espera').value, 10); return (isNaN(v) ? 0 : v) * 60000; }
+  function ESPERA(){ var v = parseInt($('espera').value, 10); return (isNaN(v) ? 0 : v) * 1000; } // las opciones están en segundos
+  function fmtEsp(ms){ return ms < 60000 ? Math.ceil(ms / 1000) + " s" : Math.ceil(ms / 60000) + " min"; }
 
   function normTel(t){
     var d = String(t).replace(/\D/g, "");
@@ -201,7 +224,7 @@
       if (vistos[nt]) return;
       vistos[nt] = 1;
       var n = intentos(s.id, nt), i = idx++;
-      html += '<div class="tel">📞 ' + esc(nt) + ' <span class="int">' + n + '/' + max + '</span>' + (ESTADO.malos[clave(s.id, nt)] ? ' ✖ no arrancó' : (n >= max ? ' (máximo)' : (faltaDe(s.id, nt) > 0 ? ' · espera ' + Math.ceil(faltaDe(s.id, nt) / 60000) + ' min' : ''))) +
+      html += '<div class="tel">📞 ' + esc(nt) + ' <span class="int">' + n + '/' + max + '</span>' + (ESTADO.malos[clave(s.id, nt)] ? ' ✖ no arrancó' : (n >= max ? ' (máximo)' : (faltaDe(s.id, nt) > 0 ? ' · espera ' + fmtEsp(faltaDe(s.id, nt)) : ''))) +
         (MODO === "manual" ? ' <button class="cp" onclick="llamarNumero(' + i + ')">Llamar</button>' : '') + '</div>';
     });
     if (esContactado(s.id)) html += '<div class="contactado">✔ Contactado: se saltan sus demás números</div>';
@@ -246,7 +269,7 @@
     if (!num) {
       log("Este seller no tiene números pendientes");
       if (auto) avanzar();
-      else { var fs = esperaDe(s); msg(fs !== null ? "El siguiente intento a este seller estará disponible en " + Math.ceil(fs / 60000) + " min." : "Este seller ya llegó al máximo de intentos en todos sus números."); }
+      else { var fs = esperaDe(s); msg(fs !== null ? "El siguiente intento a este seller estará disponible en " + fmtEsp(fs) + "." : "Este seller ya llegó al máximo de intentos en todos sus números."); }
       return;
     }
     try {
@@ -325,7 +348,7 @@
     var num = telsDe(s)[i]; if (!num) return;
     delete ESTADO.malos[clave(s.id, num)]; guardarEstado();
     var f = faltaDe(s.id, num);
-    if (f > 0 && intentos(s.id, num) < MAXI() && !confirm("Este número se marcó hace poco. El siguiente intento recomendado es en " + Math.ceil(f / 60000) + " min. ¿Llamar de todos modos?")) return;
+    if (f > 0 && intentos(s.id, num) < MAXI() && !confirm("Este número se marcó hace poco. El siguiente intento recomendado es en " + fmtEsp(f) + ". ¿Llamar de todos modos?")) return;
     if (intentos(s.id, num) >= MAXI() && !confirm("Este número ya se marcó " + intentos(s.id, num) + " veces. ¿Llamar de todos modos?")) return;
     llamarActual(false, num);
   }
@@ -401,6 +424,7 @@
   window.addEventListener("message", function(e){
     if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin)) return;
     var d = e.data;
+    if (d && d.type === "resp_llamada" && PEND[d.rid]) { var pp = PEND[d.rid]; delete PEND[d.rid]; mostrarRespuesta(pp, d.r || {}); return; }
     if (d && d.type === "cola" && Array.isArray(d.items)) {
       pausar(""); COLA = d.items.slice(0, 500); pos = 0; RONDA = 1;
       log("Lista recibida: " + COLA.length + " sellers"); uso("discador_lista", "sellers=" + COLA.length);
@@ -427,10 +451,12 @@
   window.addEventListener("llapro_phonewidget_on_call_start", function(e){
     EN_LLAMADA = true; FALLOS_SEGUIDOS = 0; FALLOS_RECIENTES = []; if (WD) { clearTimeout(WD); WD = null; }
     log("call_start " + JSON.stringify(e.detail));
+    registrarInicio(e.detail);
     uso("llamada_inicio", "seller=" + ((e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL) + " modo=" + MODO);
   });
   window.addEventListener("llapro_phonewidget_on_call_end", function(e){
     log("call_end " + JSON.stringify(e.detail));
+    registrarFin();
     EN_LLAMADA = false;
     uso("llamada_fin", "seller=" + ((e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL) + " modo=" + MODO);
     var id = (e.detail && e.detail.optionalData && e.detail.optionalData.contactExternalId) || ACTUAL;
@@ -442,6 +468,111 @@
       if (RUN) avanzar();
     }
   });
+
+
+  // ---- Mis llamadas de hoy: transcripción y audio (los pide el tablero a comOS) ----
+  function cargarLlamadas(){
+    var e = null;
+    try { e = JSON.parse(localStorage.getItem('pdv_llamadas_v1') || 'null'); } catch(err){ e = null; }
+    if (!e || e.dia !== hoy() || !Array.isArray(e.items)) e = { dia: hoy(), items: [] };
+    e.items.forEach(function(it){ if (!it.fin) it.fin = it.ini; }); // una llamada que quedó abierta al recargar la página
+    return e;
+  }
+  var LLAM = cargarLlamadas(), PEND = {}, MODAL_ITEM = null, MODAL_MODO = "", MODAL_TEXTO = "";
+  function guardarLlamadas(){ try { localStorage.setItem('pdv_llamadas_v1', JSON.stringify(LLAM)); } catch(err){} }
+  function chequeLlamadasDia(){ if (LLAM.dia !== hoy()) LLAM = { dia: hoy(), items: [] }; }
+  function fmtHora(ms){ var d = new Date(ms); return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); }
+  function nombreSeller(id){
+    for (var i = 0; i < COLA.length; i++) if (String(COLA[i].id) === String(id)) {
+      var s = COLA[i]; return (s.negocio ? s.negocio + " · " : "") + (s.nombre || id);
+    }
+    return String(id || "");
+  }
+  function registrarInicio(det){
+    chequeLlamadasDia();
+    var id = (det && det.optionalData && det.optionalData.contactExternalId) || ACTUAL || "";
+    LLAM.items.push({ to: (det && det.callTo) || ACTUAL_TEL || "", ini: Date.now(), fin: null, seller: String(id).indexOf("prueba") === 0 ? "Llamada de prueba" : nombreSeller(id), id: String(id) });
+    if (LLAM.items.length > 100) LLAM.items.shift();
+    guardarLlamadas(); renderLlamadas();
+  }
+  function registrarFin(){
+    chequeLlamadasDia();
+    for (var k = LLAM.items.length - 1; k >= 0; k--) if (!LLAM.items[k].fin) { LLAM.items[k].fin = Date.now(); break; }
+    guardarLlamadas(); renderLlamadas();
+  }
+  function renderLlamadas(){
+    chequeLlamadasDia();
+    var el = $('llamLista');
+    if (!LLAM.items.length) { el.innerHTML = '<div class="prog">Todavía no hiciste llamadas hoy.</div>'; return; }
+    var html = "";
+    for (var k = LLAM.items.length - 1, n = 0; k >= 0 && n < 30; k--, n++) {
+      var it = LLAM.items[k], listo = !!it.fin;
+      var dur = listo ? Math.round((it.fin - it.ini) / 1000) + " s" : "en curso";
+      html += '<div class="llam"><span class="t"><b>' + esc(it.seller) + '</b><br>' + esc(it.to) + ' · ' + fmtHora(it.ini) + ' · ' + dur + '</span>' +
+        '<button onclick="verLlamada(' + k + ',\'texto\')"' + (listo ? '' : ' disabled') + '>📝 Transcripción</button>' +
+        '<button onclick="verLlamada(' + k + ',\'audio\')"' + (listo ? '' : ' disabled') + '>▶ Audio</button></div>';
+    }
+    el.innerHTML = html;
+  }
+  function modalMsg(m){ $('mlCuerpo').textContent = m || ""; }
+  function abrirModal(titulo, it){
+    MODAL_ITEM = it; MODAL_TEXTO = "";
+    $('mlTitulo').textContent = titulo;
+    $('mlSub').textContent = it.seller + " · " + it.to + " · " + fmtHora(it.ini);
+    $('mlAudio').innerHTML = ""; $('mlCuerpo').textContent = ""; $('mlCopiar').style.display = "none";
+    $('modalLlam').style.display = "flex";
+  }
+  function cerrarModal(){
+    MODAL_ITEM = null; $('mlAudio').innerHTML = ""; $('modalLlam').style.display = "none";
+  }
+  function copiarTexto(){
+    if (!MODAL_TEXTO) return;
+    var listo = function(){ $('mlCopiar').textContent = '¡Copiado!'; setTimeout(function(){ $('mlCopiar').textContent = 'Copiar'; }, 1500); };
+    var respaldo = function(){
+      var ta = document.createElement('textarea'); ta.value = MODAL_TEXTO; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); listo(); } catch(e){}
+      document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(MODAL_TEXTO).then(listo, respaldo); } else { respaldo(); }
+  }
+  function verLlamada(i, modo){
+    var it = LLAM.items[i]; if (!it) return;
+    abrirModal(modo === "audio" ? "▶ Audio de la llamada" : "📝 Transcripción de la llamada", it);
+    MODAL_MODO = modo;
+    uso(modo === "audio" ? "ver_audio" : "ver_transcripcion", "");
+    pedirLlamada(it, modo, 0);
+  }
+  function pedirLlamada(it, modo, intento){
+    if (!window.opener) { modalMsg("Abre el discador desde el tablero para ver la transcripción y el audio."); return; }
+    var rid = Math.random().toString(36).slice(2);
+    PEND[rid] = { it: it, modo: modo, intento: intento };
+    modalMsg(intento ? "Buscando la llamada en comOS… (intento " + (intento + 1) + ")" : "Buscando la llamada…");
+    try { window.opener.postMessage({ type: "pedir_llamada", rid: rid, to: it.to, startMs: it.ini }, "*"); }
+    catch(e){ delete PEND[rid]; modalMsg("No se pudo contactar con el tablero."); return; }
+    setTimeout(function(){ if (PEND[rid]) { delete PEND[rid]; if (MODAL_ITEM === it) modalMsg("El tablero no respondió. Cierra esta ventana y vuelve a pulsar el botón."); } }, 45000);
+  }
+  function reintentar(p, ms, tope, texto){
+    if (p.intento >= tope) { modalMsg("Todavía no está disponible. Vuelve a pulsar el botón en un par de minutos."); return; }
+    modalMsg(texto);
+    setTimeout(function(){ if (MODAL_ITEM === p.it && MODAL_MODO === p.modo) pedirLlamada(p.it, p.modo, p.intento + 1); }, ms);
+  }
+  function mostrarRespuesta(p, r){
+    if (MODAL_ITEM !== p.it || MODAL_MODO !== p.modo) return;
+    if (r.estado === "buscando") { reintentar(p, 10000, 18, "Buscando la llamada… (puede tardar unos minutos en aparecer; se vuelve a intentar solo)"); return; }
+    if (r.estado === "procesando") { reintentar(p, 15000, 12, "comOS todavía está procesando el audio y la transcripción… se vuelve a intentar solo."); return; }
+    if (r.estado === "sin_audio") { modalMsg(r.mensaje || "Esta llamada no tiene audio."); return; }
+    if (r.estado !== "listo") { modalMsg("No se pudo consultar la llamada: " + (r.mensaje || "error desconocido")); return; }
+    if (p.modo === "audio") {
+      if (!r.audioUrl) { reintentar(p, 15000, 8, "El audio todavía no está disponible… se vuelve a intentar solo."); return; }
+      var a = document.createElement("audio"); a.controls = true; a.autoplay = true; a.src = r.audioUrl;
+      $('mlAudio').innerHTML = ""; $('mlAudio').appendChild(a);
+      modalMsg("Duración: " + (r.duracion || 0) + " s");
+    } else {
+      if (!r.texto) { reintentar(p, 15000, 12, "La transcripción todavía no está lista (comOS la genera unos minutos después de la llamada)… se vuelve a intentar solo."); return; }
+      MODAL_TEXTO = r.texto; modalMsg(r.texto); $('mlCopiar').style.display = "";
+    }
+  }
+  renderLlamadas();
 
   render();
 </script>
